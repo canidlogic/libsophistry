@@ -63,6 +63,12 @@ typedef struct SPHY_ISRCFMT_TAG SPHY_ISRCFMT;
 struct SPHY_ASRCFMT_TAG;
 typedef struct SPHY_ASRCFMT_TAG SPHY_ASRCFMT;
 
+struct SPHY_IDSTFMT_TAG;
+typedef struct SPHY_IDSTFMT_TAG SPHY_IDSTFMT;
+
+struct SPHY_ADSTFMT_TAG;
+typedef struct SPHY_ADSTFMT_TAG SPHY_ADSTFMT;
+
 /*
  * Status code definitions.
  */
@@ -164,6 +170,57 @@ sphy_int sphy_scanline_import(
     const sphy_u8      * psrc,
     sphy_int             src_len,
     const SPHY_ISRCFMT * src_fmt);
+
+/*
+ * @@TODO: update spec below
+ * 
+ * Import decoded pixels from binary data into a scanline object.
+ * 
+ * psl is the scanline object to write the pixels into, while psrc
+ * points to the bytes of data that shall be decoded.
+ * 
+ * offs is the zero-based index to begin writing encoded pixels to
+ * within the scanline.  Passing zero means decoded pixels are written
+ * starting at the first sample of the scanline.  offs must be at least
+ * zero and less than the width, as determined by sphy_scanline_count.
+ * 
+ * src_fmt describes the format of the pixels that are encoded in the
+ * binary data.
+ * 
+ * src_len is the length of the binary data in bytes.  It must be
+ * greater than zero.  Its length must be such that there are no
+ * partially encoded pixels at the end of the binary data.  Furthermore,
+ * the number of pixels included in the binary data may not exceed
+ * (width - offs), where width is the width of the scanline in pixels
+ * and offs is the offs parameter.
+ * 
+ * The return value is SPHY_OK if successful, else one of the error
+ * status codes.
+ * 
+ * ...
+ * 
+ * Parameters:
+ * 
+ *   pdst - pointer to the binary data to encode samples into
+ * 
+ *   dst_len - the length of the binary data in bytes
+ * 
+ *   dst_fmt - the format of the binary data to encode into
+ * 
+ *   psl - the scanline object to export samples from
+ * 
+ *   offs - the scanline offset to begin writing the imported pixels
+ * 
+ * Return:
+ * 
+ *   SPHY_OK if successful, else one of the error status codes
+ */
+sphy_int sphy_scanline_export(
+    sphy_u8            * pdst,
+    sphy_int             dst_len,
+    const SPHY_IDSTFMT * dst_fmt,
+    SPHY_SCANLINE *      psl,
+    sphy_int             offs);
 
 /*
  * Return the width in pixels of the given scanline.
@@ -295,5 +352,7 @@ sphy_int sphy_audiobuf_import(
     const sphy_u8      * psrc,
     sphy_int             src_len,
     const SPHY_ASRCFMT * src_fmt);
+
+/* @@TODO: add audiobuf export function */
 
 #endif
