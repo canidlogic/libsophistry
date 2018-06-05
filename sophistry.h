@@ -60,6 +60,9 @@ typedef struct SPHY_AUDIOBUF_TAG SPHY_AUDIOBUF;
 struct SPHY_ISRCFMT_TAG;
 typedef struct SPHY_ISRCFMT_TAG SPHY_ISRCFMT;
 
+struct SPHY_ASRCFMT_TAG;
+typedef struct SPHY_ASRCFMT_TAG SPHY_ASRCFMT;
+
 /*
  * Status code definitions.
  */
@@ -243,5 +246,54 @@ sphy_u32 *sphy_audiobuf_ptr(SPHY_AUDIOBUF *pau);
  *   the count of samples in the buffer
  */
 sphy_int sphy_audiobuf_count(SPHY_AUDIOBUF *pau);
+
+/*
+ * Import decoded audio samples from binary data into an audio buffer.
+ * 
+ * pau is the audio buffer to write the audio samples into, while psrc
+ * points to the bytes of data that shall be decoded.
+ * 
+ * offs is the zero-based index to begin writing encoded audio samples
+ * to within the audio buffer.  Passing zero means decoded samples are
+ * written starting at the first sample of the audio buffer.  offs must
+ * be at least zero and less than the count of samples, as determined by
+ * sphy_audiobuf_count.
+ * 
+ * src_fmt describes the format of the audio samples that are encoded in
+ * the binary data.
+ * 
+ * src_len is the length of the binary data in bytes.  It must be
+ * greater than zero.  Its length must be such that there are no
+ * partially encoded samples at the end of the binary data.
+ * Furthermore, the number of samples included in the binary data may
+ * not exceed (count - offs), where count is the count of samples in the
+ * audio buffer and offs is the offs parameter.
+ * 
+ * The return value is SPHY_OK if successful, else one of the error
+ * status codes.
+ * 
+ * Parameters:
+ * 
+ *   pau - the audio buffer to import samples into
+ * 
+ *   offs - the audio buffer offset to begin writing the imported
+ *   samples
+ * 
+ *   psrc - pointer to the binary data to decode samples from
+ * 
+ *   src_len - the length of the binary data in bytes
+ * 
+ *   src_fmt - the format of the binary data to import from
+ * 
+ * Return:
+ * 
+ *   SPHY_OK if successful, else one of the error status codes
+ */
+sphy_int sphy_audiobuf_import(
+    SPHY_AUDIOBUF *      pau,
+    sphy_int             offs,
+    const sphy_u8      * psrc,
+    sphy_int             src_len,
+    const SPHY_ASRCFMT * src_fmt);
 
 #endif
