@@ -172,32 +172,29 @@ sphy_int sphy_scanline_import(
     const SPHY_ISRCFMT * src_fmt);
 
 /*
- * @@TODO: update spec below
+ * Export pixels from a scanline object into encoded binary data.
  * 
- * Import decoded pixels from binary data into a scanline object.
+ * pdst points to the byte array that the encoded pixels shall be
+ * written into, while psl is the scanline object the pixels shall be
+ * read from.
  * 
- * psl is the scanline object to write the pixels into, while psrc
- * points to the bytes of data that shall be decoded.
+ * offs is the zero-based index to begin reading encoded pixels from
+ * within the scanline.  Passing zero means pixels are read starting at
+ * the first sample of the scanline.  offs must be at least zero and
+ * less than the width, as determined by sphy_scanline_count.
  * 
- * offs is the zero-based index to begin writing encoded pixels to
- * within the scanline.  Passing zero means decoded pixels are written
- * starting at the first sample of the scanline.  offs must be at least
- * zero and less than the width, as determined by sphy_scanline_count.
+ * dst_fmt describes the format of the pixels that will be encoded into
+ * the binary data.
  * 
- * src_fmt describes the format of the pixels that are encoded in the
- * binary data.
- * 
- * src_len is the length of the binary data in bytes.  It must be
- * greater than zero.  Its length must be such that there are no
+ * dst_len is the length of the output byte buffer in bytes.  It must be
+ * greater than zero.  Its length must be such that there will be no
  * partially encoded pixels at the end of the binary data.  Furthermore,
- * the number of pixels included in the binary data may not exceed
- * (width - offs), where width is the width of the scanline in pixels
- * and offs is the offs parameter.
+ * the number of pixels that will be encoded in the data of the given
+ * byte length may not exceed (width - offs), where width is the width
+ * of the scanline in pixels and offs is the offs parameter.
  * 
  * The return value is SPHY_OK if successful, else one of the error
  * status codes.
- * 
- * ...
  * 
  * Parameters:
  * 
@@ -209,7 +206,7 @@ sphy_int sphy_scanline_import(
  * 
  *   psl - the scanline object to export samples from
  * 
- *   offs - the scanline offset to begin writing the imported pixels
+ *   offs - the scanline offset to begin reading pixels from
  * 
  * Return:
  * 
@@ -353,6 +350,53 @@ sphy_int sphy_audiobuf_import(
     sphy_int             src_len,
     const SPHY_ASRCFMT * src_fmt);
 
-/* @@TODO: add audiobuf export function */
+/*
+ * Export audio samples from an audio buffer into encoded binary data.
+ * 
+ * pdst points to the byte array that the encoded samples shall be
+ * written into, while pau is the audio buffer the samples shall be read
+ * from.
+ * 
+ * offs is the zero-based index to begin reading samples from within the
+ * audio buffer.  Passing zero means samples are read starting at the
+ * first sample of the audio buffer.  offs must be at least zero and
+ * less than the sample count, as determined by sphy_audiobuf_count.
+ * 
+ * dst_fmt describes the format of the samples that will be encoded into
+ * the binary data.
+ * 
+ * dst_len is the length of the output byte buffer in bytes.  It must be
+ * greater than zero.  Its length must be such that there will be no
+ * partially encoded samples at the end of the binary data.
+ * Furthermore, the number of samples that will be encoded in the data
+ * of the given byte length may not exceed (count - offs), where count
+ * is the count of samples in the audio buffer and offs is the offs
+ * parameter.
+ * 
+ * The return value is SPHY_OK if successful, else one of the error
+ * status codes.
+ * 
+ * Parameters:
+ * 
+ *   pdst - pointer to the binary data to encode samples into
+ * 
+ *   dst_len - the length of the binary data in bytes
+ * 
+ *   dst_fmt - the format of the binary data to encode into
+ * 
+ *   psl - the audio buffer to export samples from
+ * 
+ *   offs - the sample offset to begin reading from
+ * 
+ * Return:
+ * 
+ *   SPHY_OK if successful, else one of the error status codes
+ */
+sphy_int sphy_audiobuf_export(
+    sphy_u8            * pdst,
+    sphy_int             dst_len,
+    const SPHY_ADSTFMT * dst_fmt,
+    SPHY_AUDIOBUF *      pau,
+    sphy_int             offs);
 
 #endif
