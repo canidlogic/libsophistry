@@ -445,4 +445,50 @@ void sphy_isrcfmt_free(SPHY_ISRCFMT *pfmt);
  */
 void sphy_isrcfmt_reset(SPHY_ISRCFMT *pfmt);
 
+/*
+ * Create a new audio source format with default settings.
+ * 
+ * This format is used to describe audio data that is being imported 
+ * with sphy_audiobuf_import.
+ * 
+ * The default format is that channels are ordered left right, with each
+ * channel sample being an unsigned 16-bit integer in range 0-65535.
+ * These channel samples are copied as-is into the audio buffer.
+ * 
+ * The default format can be modified with other sphy_asrcfmt functions.
+ * It can be reset to default with sphy_asrcfmt_reset.
+ * 
+ * Allocated format objects should eventually be released with
+ * sphy_asrcfmt_free.
+ * 
+ * Return:
+ * 
+ *   a newly allocated audio source format with default settings
+ */
+SPHY_ASRCFMT *sphy_asrcfmt_new(void);
+
+/*
+ * Release the provided audio source format object.
+ * 
+ * The object may not be used again after this function is called.
+ * 
+ * If NULL is passed, the call is ignored.
+ * 
+ * Parameters:
+ * 
+ *   pfmt - the format object to free, or NULL
+ */
+void sphy_asrcfmt_free(SPHY_ASRCFMT *pfmt);
+
+/*
+ * Reset an audio source format object back to the default settings.
+ * 
+ * See sphy_asrcfmt_new for a description of the default settings.
+ * 
+ * Parameters:
+ * 
+ *   pfmt - the format object to reset
+ */
+void sphy_asrcfmt_reset(SPHY_ASRCFMT *pfmt);
+
 #endif
