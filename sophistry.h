@@ -399,4 +399,50 @@ sphy_int sphy_audiobuf_export(
     SPHY_AUDIOBUF *      pau,
     sphy_int             offs);
 
+/*
+ * Create a new image source format with default settings.
+ * 
+ * This format is used to describe image data that is being imported
+ * with sphy_scanline_import.
+ * 
+ * The default format is that channels are ordered ARGB, with each
+ * channel sample being an unsigned 8-bit byte in range 0-255.  These
+ * channel samples are copied as-is into the scanline buffer.
+ * 
+ * The default format can be modified with other sphy_isrcfmt functions.
+ * It can be reset to default with sphy_isrcfmt_reset.
+ * 
+ * Allocated format objects should eventually be released with
+ * sphy_isrcfmt_free.
+ * 
+ * Return:
+ * 
+ *   a newly allocated image source format with default settings
+ */
+SPHY_ISRCFMT *sphy_isrcfmt_new(void);
+
+/*
+ * Release the provided image source format object.
+ * 
+ * The object may not be used again after this function is called.
+ * 
+ * If NULL is passed, the call is ignored.
+ * 
+ * Parameters:
+ * 
+ *   pfmt - the format object to free, or NULL
+ */
+void sphy_isrcfmt_free(SPHY_ISRCFMT *pfmt);
+
+/*
+ * Reset an image source format object back to the default settings.
+ * 
+ * See sphy_isrcfmt_new for a description of the default settings.
+ * 
+ * Parameters:
+ * 
+ *   pfmt - the format object to reset
+ */
+void sphy_isrcfmt_reset(SPHY_ISRCFMT *pfmt);
+
 #endif
