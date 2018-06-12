@@ -39,10 +39,8 @@ typedef float    sphy_float;  /* Floating-point type               */
 /*
  * Pack ARGB channels into a 32-bit image sample.
  * 
- * Each provided channel is clamped to the range zero up to and
- * including SPHY_MAXBYTE.  That is, if a channel value is greater than
- * SPHY_MAXBYTE, it will be written as SPHY_MAXBYTE, while if it is less
- * than zero, it will be written as zero.
+ * Each provided channel is clamped to range zero to SPHY_MAXBYTE using
+ * sphy_clamp.
  * 
  * Parameters:
  * 
@@ -63,10 +61,8 @@ sphy_u32 sphy_argb(sphy_int a, sphy_int r, sphy_int g, sphy_int b);
 /*
  * Pack left and right channels into a 32-bit image sample.
  * 
- * Each provided channel is clamped to the range SPHY_MINSWORD up to and
- * including SPHY_MAXSWORD.  That is, if a channel value is greater than
- * SPHY_MAXSWORD, it will be written as SPHY_MAXSWORD, while if it is
- * less than SPHY_MINSWORD, it will be written as SPHY_MINSWORD.
+ * Each provided channel is clamped to range SPHY_MINSWORD to
+ * SPHY_MAXSWORD using sphy_clamp.
  * 
  * The packed channel values will be converted to unsigned range zero up
  * to and including SPHY_MAXUWORD by adding 32768 to each clamped
@@ -181,21 +177,91 @@ sphy_int sphy_left(sphy_u32 stereo);
 sphy_int sphy_right(sphy_u32 stereo);
 
 /*
+ * Bound a floating point value to unsigned normal range.
+ * 
+ * If the provided value is greater than or equal to 0.0 and less than
+ * or equal to +1.0, then it is left alone.
+ * 
+ * If the provided value is greater than +1.0, it is set to +1.0.
+ * 
+ * If the provided value is less than 0.0, it is set to 0.0.
+ * 
+ * In all other cases (such as for a NaN), the value is set to 0.0.
+ * 
+ * The return value will always be in range 0.0 up to +1.0.
+ * 
+ * Parameters:
+ * 
+ *   f - the floating point value to bound
+ * 
+ * Return:
+ * 
+ *   the value bounded to unsigned normal range
+ */
+sphy_float sphy_boundu(sphy_float f);
+
+/*
+ * Bound a floating point value to signed normal range.
+ * 
+ * If the provided value is greater than or equal to -1.0 and less than
+ * or equal to +1.0, then it is left alone.
+ * 
+ * If the provided value is greater than +1.0, it is set to +1.0.
+ * 
+ * If the provided value is less than -1.0, it is set to -1.0.
+ * 
+ * In all other cases (such as for a NaN), the value is set to 0.0.
+ * 
+ * The return value will always be in range -1.0 up to +1.0.
+ * 
+ * Parameters:
+ * 
+ *   f - the floating point value to bound
+ * 
+ * Return:
+ * 
+ *   the value bounded to unsigned normal range
+ */
+sphy_float sphy_bounds(sphy_float f);
+
+/*
+ * Clamp an integer value to range.
+ * 
+ * minval must be less than or equal to maxval.
+ * 
+ * If i is less than minval, it is set to minval.  If i is greater than
+ * maxval, it is set to maxval.  Otherwise, it is left alone.
+ * 
+ * The return value will always be in range minval up to and including
+ * maxval.
+ * 
+ * Parameters:
+ * 
+ *   i - the integer value to clamp
+ * 
+ *   minval - the minimum value in the clamped range
+ * 
+ *   maxval - the maximum value in the clamped range
+ * 
+ * Return:
+ * 
+ *   the clamped integer value
+ */
+sphy_int sphy_clamp(sphy_int i, sphy_int minval, sphy_int maxval);
+
+/*
  * Quantize an unsigned normal component into an unsigned integer
  * component.
  * 
- * The provided normal component (f) is first clamped to range 0.0 up to
- * +1.0.  If the value is in range 0.0 to 1.0, it is left alone; if it
- * is greater than 1.0, it is set to 1.0; if it is less than 0.0, it is
- * set to 0.0; otherwise (such as for a NaN), it is set to 0.0.
+ * The provided normal component (f) is first bounded to unsigned normal
+ * range (0.0 to +1.0) using sphy_boundu.
  * 
  * maxval must be in range one up to and including SPHY_MAXUWORD.  The
- * clamped normal component is then multiplied by maxval.  This result
- * is then rounded to the nearest integer.
+ * bounded unsigned normal component is then multiplied by maxval.  This
+ * result is then rounded to the nearest integer.
  * 
  * Finally, the rounded result is converted to an integer and clamped to
- * the integer range zero up to and including maxval, with values less
- * than zero set to zero and values greater than maxval set to maxval.
+ * the integer range zero to maxval by using sphy_clamp.
  * 
  * The return value is in range zero up to and including maxval.
  * 
@@ -214,19 +280,15 @@ sphy_int sphy_quantu(sphy_float f, sphy_int maxval);
 /*
  * Quantize a signed normal component into a signed integer component.
  * 
- * The provided normal component (f) is first clamped to range -1.0 up
- * to +1.0.  If the value is in range -1.0 to +1.0, it is left alone; if
- * it is greater than +1.0, it is set to +1.0; if it is less than -1.0,
- * it is set to -1.0; otherwise (such as for a NaN), it is set to 0.0.
+ * The provided normal component (f) is first bounded to signed normal
+ * range (-1.0 to +1.0) using sphy_bounds.
  * 
  * maxval must be in range one up to and including SPHY_MAXSWORD.  The
- * clamped normal component is then multiplied by maxval.  This result
- * is then rounded to the nearest integer.
+ * bounded signed normal component is then multiplied by maxval.  This
+ * result is then rounded to the nearest integer.
  * 
  * Finally, the rounded result is converted to an integer and clamped to
- * the integer range -maxval up to and including +maxval, with values
- * less than -maxval set to -maxval and values greater than +maxval set
- * to +maxval.
+ * the integer range -maxval to +maxval by using sphy_clamp.
  * 
  * The return value is in range -maxval up to and including +maxval.
  * 
@@ -247,5 +309,61 @@ sphy_int sphy_quantu(sphy_float f, sphy_int maxval);
  *   the quantized signed value
  */
 sphy_int sphy_quants(sphy_float f, sphy_int maxval);
+
+/*
+ * Normalize an unsigned integer component into a normal float.
+ * 
+ * The provided integer component (i) is first clamped to range zero to
+ * maxval by using sphy_clamp.  maxval must be in range one up to and
+ * including SPHY_MAXUWORD.
+ * 
+ * The integer component is then converted to a float value and divided
+ * by maxval.  Finally, the float value is bounded to unsigned range
+ * (0.0 to +1.0) using sphy_boundu.
+ * 
+ * The return value is in range 0.0 to +1.0.
+ * 
+ * Parameters:
+ * 
+ *   i - the unsigned integer component to normalize
+ * 
+ *   maxval - the maximum integer value
+ * 
+ * Return:
+ * 
+ *   the normalized unsigned value
+ */
+sphy_float sphy_normu(sphy_int i, sphy_int maxval);
+
+/*
+ * Normalize a signed integer component into a normal float.
+ * 
+ * The provided integer component (i) is first clamped to range -maxval
+ * to maxval by using sphy_clamp.  maxval must be in range one up to and
+ * including SPHY_MAXSWORD.
+ * 
+ * The integer component is then converted to a float value and divided
+ * by maxval.  Finally, the float value is bounded to signed range
+ * (-1.0 to +1.0) using sphy_bounds.
+ * 
+ * The return value is in range -1.0 to +1.0.
+ * 
+ * Note that in the common two's-complement representation of signed
+ * integers, the negative range goes one further than the positive range
+ * (that is, (-maxval-1) up to +maxval).  This conversion function
+ * treats the "one further" negative value of (-maxval-1) as if it were
+ * -maxval, so that the range of values is always symmetric around zero.
+ * 
+ * Parameters:
+ * 
+ *   i - the signed integer component to normalize
+ * 
+ *   maxval - the maximum integer value
+ * 
+ * Return:
+ * 
+ *   the normalized signed value
+ */
+sphy_float sphy_norms(sphy_int i, sphy_int maxval);
 
 #endif
