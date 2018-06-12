@@ -4,491 +4,84 @@
 /*
  * sophistry.h
  * 
- * Header for the Sophistry library, which defines a common image
- * scanline and audio buffer format.
+ * Header for the Sophistry library, which defines a 32-bit image and
+ * audio sample format.
  * 
- * Compilation
- * ===========
- * 
- * If <stdint.h> is not available for the local compiler, see the
- * documentation of the integer types below in this header for a
- * workaround.
+ * See the README.md document for further information.
  */
 
 #include <stddef.h>
 
 /*
- * The integer types.
+ * The basic type declarations.
  * 
- * sphy_u32 is an unsigned, 32-bit integer that is used to store packed
- * samples for both image scanlines and audio buffers.
+ * If <stdint.h> is not supported by the compiler, then comment that
+ * line out and rewrite the typedefs so they use the appropriate types
+ * for the compiler.
  * 
- * sphy_int is a signed integer type that must be at least 32-bit.
- * 
- * sphy_u8 is an unsigned, 8-bit integer that is used to represent
- * bytes.
- * 
- * The definitions given here use the <stdint.h> header.  If this
- * header is not available, comment out the include below and replace
- * the uint32_t, int32_t, and uint8_t in the definitions below with
- * whatever are the appropriate types for the compiler.
+ * If some of the standard definitions used by the typedefs are missing,
+ * then rewrite the typedefs to use the definitions appropriate for the
+ * compiler.
  */
 #include <stdint.h>
-typedef uint32_t sphy_u32;    /* Unsigned integer, exactly  32-bit */
-typedef int32_t  sphy_int;    /* Signed   integer, at least 32-bit */
-typedef uint8_t  sphy_u8 ;    /* Unsigned integer, exactly   8-bit */
+typedef uint32_t sphy_u32  ;  /* Unsigned integer, exactly  32-bit */
+typedef int32_t  sphy_int  ;  /* Signed   integer, at least 32-bit */
+typedef float    sphy_float;  /* Floating-point type               */
 
 /*
- * The maximum number of samples in an object.
- * 
- * This is the upper limit on the width of a scanline, and the upper
- * limit on the number of samples in an audio buffer.
+ * The basic limits.
  */
-#define SPHY_MAXCOUNT ((sphy_int) 268435456L)
+#define SPHY_MAXBYTE  (              255 )  /* Max unsigned  8-bit */
+#define SPHY_MAXUWORD ((sphy_int)  65535L)  /* Max unsigned 16-bit */
+#define SPHY_MAXSWORD ((sphy_int)  32767L)  /* Max   signed 16-bit */
+#define SPHY_MINSWORD ((sphy_int) -32768L)  /* Min   signed 16-bit */
 
 /*
- * Structure prototypes.
+ * Pack ARGB channels into a 32-bit image sample.
  * 
- * The actual structures are defined in the implementation file.
- */
-struct SPHY_SCANLINE_TAG;
-typedef struct SPHY_SCANLINE_TAG SPHY_SCANLINE;
-
-struct SPHY_AUDIOBUF_TAG;
-typedef struct SPHY_AUDIOBUF_TAG SPHY_AUDIOBUF;
-
-struct SPHY_ISRCFMT_TAG;
-typedef struct SPHY_ISRCFMT_TAG SPHY_ISRCFMT;
-
-struct SPHY_ASRCFMT_TAG;
-typedef struct SPHY_ASRCFMT_TAG SPHY_ASRCFMT;
-
-struct SPHY_IDSTFMT_TAG;
-typedef struct SPHY_IDSTFMT_TAG SPHY_IDSTFMT;
-
-struct SPHY_ADSTFMT_TAG;
-typedef struct SPHY_ADSTFMT_TAG SPHY_ADSTFMT;
-
-/*
- * Status code definitions.
- */
-#define SPHY_OK         ( 0)  /* Operation successful */
-
-/*
- * Constructor for a scanline.
- * 
- * Pass the width of the scanline in pixels.  The width must be at least
- * one and at most SPHY_MAXCOUNT.
- * 
- * The returned scanline should eventually be freed with
- * sphy_scanline_free.
- * 
- * NULL is returned if memory allocation failed.
+ * Each provided channel is clamped to the range zero up to and
+ * including SPHY_MAXBYTE.  That is, if a channel value is greater than
+ * SPHY_MAXBYTE, it will be written as SPHY_MAXBYTE, while if it is less
+ * than zero, it will be written as zero.
  * 
  * Parameters:
  * 
- *   width - width of the scanline in pixels
+ *   a - the alpha channel
+ * 
+ *   r - the red channel
+ * 
+ *   g - the green channel
+ * 
+ *   b - the blue channel
  * 
  * Return:
  * 
- *   the new scanline object, or NULL if memory allocation failed
+ *   the packed 32-bit image sample
  */
-SPHY_SCANLINE *sphy_scanline_alloc(sphy_int width);
+sphy_u32 sphy_argb(sphy_int a, sphy_int r, sphy_int g, sphy_int b);
 
 /*
- * Free an allocated scanline object.
+ * Pack left and right channels into a 32-bit image sample.
  * 
- * The scanline object must not be used after this call.  If NULL is
- * passed, the call is ignored.
+ * Each provided channel is clamped to the range SPHY_MINSWORD up to and
+ * including SPHY_MAXSWORD.  That is, if a channel value is greater than
+ * SPHY_MAXSWORD, it will be written as SPHY_MAXSWORD, while if it is
+ * less than SPHY_MINSWORD, it will be written as SPHY_MINSWORD.
+ * 
+ * The packed channel values will be converted to unsigned range zero up
+ * to and including SPHY_MAXUWORD by adding 32768 to each clamped
+ * channel value.
  * 
  * Parameters:
  * 
- *   psl - the scanline object to free, or NULL
- */
-void sphy_scanline_free(SPHY_SCANLINE *psl);
-
-/*
- * Get a pointer to the internal samples of the given scanline object.
+ *   left - the left channel
  * 
- * The pointer remains valid until the scanline object is freed with
- * sphy_scanline_free.  The total number of samples is equal to the
- * width of the scanline, as determined by sphy_scanline_count.
- * 
- * Parameters:
- * 
- *   psl - the scanline object to query
+ *   right - the right channel
  * 
  * Return:
  * 
- *   a pointer to the internal samples
+ *   the packed 32-bit audio sample
  */
-sphy_u32 *sphy_scanline_ptr(SPHY_SCANLINE *psl);
-
-/*
- * Import decoded pixels from binary data into a scanline object.
- * 
- * psl is the scanline object to write the pixels into, while psrc
- * points to the bytes of data that shall be decoded.
- * 
- * offs is the zero-based index to begin writing encoded pixels to
- * within the scanline.  Passing zero means decoded pixels are written
- * starting at the first sample of the scanline.  offs must be at least
- * zero and less than the width, as determined by sphy_scanline_count.
- * 
- * src_fmt describes the format of the pixels that are encoded in the
- * binary data.
- * 
- * src_len is the length of the binary data in bytes.  It must be
- * greater than zero.  Its length must be such that there are no
- * partially encoded pixels at the end of the binary data.  Furthermore,
- * the number of pixels included in the binary data may not exceed
- * (width - offs), where width is the width of the scanline in pixels
- * and offs is the offs parameter.
- * 
- * The return value is SPHY_OK if successful, else one of the error
- * status codes.
- * 
- * Parameters:
- * 
- *   psl - the scanline object to import pixels into
- * 
- *   offs - the scanline offset to begin writing the imported pixels
- * 
- *   psrc - pointer to the binary data to decode pixels from
- * 
- *   src_len - the length of the binary data in bytes
- * 
- *   src_fmt - the format of the binary data to import from
- * 
- * Return:
- * 
- *   SPHY_OK if successful, else one of the error status codes
- */
-sphy_int sphy_scanline_import(
-    SPHY_SCANLINE *      psl,
-    sphy_int             offs,
-    const sphy_u8      * psrc,
-    sphy_int             src_len,
-    const SPHY_ISRCFMT * src_fmt);
-
-/*
- * Export pixels from a scanline object into encoded binary data.
- * 
- * pdst points to the byte array that the encoded pixels shall be
- * written into, while psl is the scanline object the pixels shall be
- * read from.
- * 
- * offs is the zero-based index to begin reading encoded pixels from
- * within the scanline.  Passing zero means pixels are read starting at
- * the first sample of the scanline.  offs must be at least zero and
- * less than the width, as determined by sphy_scanline_count.
- * 
- * dst_fmt describes the format of the pixels that will be encoded into
- * the binary data.
- * 
- * dst_len is the length of the output byte buffer in bytes.  It must be
- * greater than zero.  Its length must be such that there will be no
- * partially encoded pixels at the end of the binary data.  Furthermore,
- * the number of pixels that will be encoded in the data of the given
- * byte length may not exceed (width - offs), where width is the width
- * of the scanline in pixels and offs is the offs parameter.
- * 
- * The return value is SPHY_OK if successful, else one of the error
- * status codes.
- * 
- * Parameters:
- * 
- *   pdst - pointer to the binary data to encode samples into
- * 
- *   dst_len - the length of the binary data in bytes
- * 
- *   dst_fmt - the format of the binary data to encode into
- * 
- *   psl - the scanline object to export samples from
- * 
- *   offs - the scanline offset to begin reading pixels from
- * 
- * Return:
- * 
- *   SPHY_OK if successful, else one of the error status codes
- */
-sphy_int sphy_scanline_export(
-    sphy_u8            * pdst,
-    sphy_int             dst_len,
-    const SPHY_IDSTFMT * dst_fmt,
-    SPHY_SCANLINE *      psl,
-    sphy_int             offs);
-
-/*
- * Return the width in pixels of the given scanline.
- * 
- * This is equal to the width that the scanline was allocated with.  Its
- * range is one up to and including SPHY_MAXCOUNT.
- * 
- * Parameters:
- * 
- *   psl - the scanline object to query
- * 
- * Return:
- * 
- *   the width of the scanline in pixels
- */
-sphy_int sphy_scanline_count(SPHY_SCANLINE *psl);
-
-/*
- * Constructor for an audio buffer.
- * 
- * Pass the number of samples in the audio buffer.  This count must be
- * at least one and at most SPHY_MAXCOUNT.
- * 
- * The returned audio buffer should eventually be freed with
- * sphy_audiobuf_free.
- * 
- * NULL is returned if memory allocation failed.
- * 
- * Parameters:
- * 
- *   samples - count of samples in the buffer
- * 
- * Return:
- * 
- *   the new audio buffer, or NULL if memory allocation failed
- */
-SPHY_AUDIOBUF *sphy_audiobuf_alloc(sphy_int samples);
-
-/*
- * Free an allocated audio buffer.
- * 
- * The audio buffer must not be used after this call.  If NULL is
- * passed, the call is ignored.
- * 
- * Parameters:
- * 
- *   pau - the audio buffer to free, or NULL
- */
-void sphy_audiobuf_free(SPHY_AUDIOBUF *pau);
-
-/*
- * Get a pointer to the internal samples of the given audio buffer.
- * 
- * The pointer remains valid until the audio buffer is freed with
- * sphy_audiobuf_free.  The total number of samples is equal to the
- * count of the audio buffer, as determined by sphy_audiobuf_count.
- * 
- * Parameters:
- * 
- *   pau - the audio buffer to query
- * 
- * Return:
- * 
- *   a pointer to the internal samples
- */
-sphy_u32 *sphy_audiobuf_ptr(SPHY_AUDIOBUF *pau);
-
-/*
- * Return the count of samples in the given audio buffer.
- * 
- * This is equal to the count that the audiob buffer was allocated with.
- * Its range is one up to and including SPHY_MAXCOUNT.
- * 
- * Parameters:
- * 
- *   pau - the audio buffer to query
- * 
- * Return:
- * 
- *   the count of samples in the buffer
- */
-sphy_int sphy_audiobuf_count(SPHY_AUDIOBUF *pau);
-
-/*
- * Import decoded audio samples from binary data into an audio buffer.
- * 
- * pau is the audio buffer to write the audio samples into, while psrc
- * points to the bytes of data that shall be decoded.
- * 
- * offs is the zero-based index to begin writing encoded audio samples
- * to within the audio buffer.  Passing zero means decoded samples are
- * written starting at the first sample of the audio buffer.  offs must
- * be at least zero and less than the count of samples, as determined by
- * sphy_audiobuf_count.
- * 
- * src_fmt describes the format of the audio samples that are encoded in
- * the binary data.
- * 
- * src_len is the length of the binary data in bytes.  It must be
- * greater than zero.  Its length must be such that there are no
- * partially encoded samples at the end of the binary data.
- * Furthermore, the number of samples included in the binary data may
- * not exceed (count - offs), where count is the count of samples in the
- * audio buffer and offs is the offs parameter.
- * 
- * The return value is SPHY_OK if successful, else one of the error
- * status codes.
- * 
- * Parameters:
- * 
- *   pau - the audio buffer to import samples into
- * 
- *   offs - the audio buffer offset to begin writing the imported
- *   samples
- * 
- *   psrc - pointer to the binary data to decode samples from
- * 
- *   src_len - the length of the binary data in bytes
- * 
- *   src_fmt - the format of the binary data to import from
- * 
- * Return:
- * 
- *   SPHY_OK if successful, else one of the error status codes
- */
-sphy_int sphy_audiobuf_import(
-    SPHY_AUDIOBUF *      pau,
-    sphy_int             offs,
-    const sphy_u8      * psrc,
-    sphy_int             src_len,
-    const SPHY_ASRCFMT * src_fmt);
-
-/*
- * Export audio samples from an audio buffer into encoded binary data.
- * 
- * pdst points to the byte array that the encoded samples shall be
- * written into, while pau is the audio buffer the samples shall be read
- * from.
- * 
- * offs is the zero-based index to begin reading samples from within the
- * audio buffer.  Passing zero means samples are read starting at the
- * first sample of the audio buffer.  offs must be at least zero and
- * less than the sample count, as determined by sphy_audiobuf_count.
- * 
- * dst_fmt describes the format of the samples that will be encoded into
- * the binary data.
- * 
- * dst_len is the length of the output byte buffer in bytes.  It must be
- * greater than zero.  Its length must be such that there will be no
- * partially encoded samples at the end of the binary data.
- * Furthermore, the number of samples that will be encoded in the data
- * of the given byte length may not exceed (count - offs), where count
- * is the count of samples in the audio buffer and offs is the offs
- * parameter.
- * 
- * The return value is SPHY_OK if successful, else one of the error
- * status codes.
- * 
- * Parameters:
- * 
- *   pdst - pointer to the binary data to encode samples into
- * 
- *   dst_len - the length of the binary data in bytes
- * 
- *   dst_fmt - the format of the binary data to encode into
- * 
- *   psl - the audio buffer to export samples from
- * 
- *   offs - the sample offset to begin reading from
- * 
- * Return:
- * 
- *   SPHY_OK if successful, else one of the error status codes
- */
-sphy_int sphy_audiobuf_export(
-    sphy_u8            * pdst,
-    sphy_int             dst_len,
-    const SPHY_ADSTFMT * dst_fmt,
-    SPHY_AUDIOBUF *      pau,
-    sphy_int             offs);
-
-/*
- * Create a new image source format with default settings.
- * 
- * This format is used to describe image data that is being imported
- * with sphy_scanline_import.
- * 
- * The default format is that channels are ordered ARGB, with each
- * channel sample being an unsigned 8-bit byte in range 0-255.  These
- * channel samples are copied as-is into the scanline buffer.
- * 
- * The default format can be modified with other sphy_isrcfmt functions.
- * It can be reset to default with sphy_isrcfmt_reset.
- * 
- * Allocated format objects should eventually be released with
- * sphy_isrcfmt_free.
- * 
- * Return:
- * 
- *   a newly allocated image source format with default settings
- */
-SPHY_ISRCFMT *sphy_isrcfmt_new(void);
-
-/*
- * Release the provided image source format object.
- * 
- * The object may not be used again after this function is called.
- * 
- * If NULL is passed, the call is ignored.
- * 
- * Parameters:
- * 
- *   pfmt - the format object to free, or NULL
- */
-void sphy_isrcfmt_free(SPHY_ISRCFMT *pfmt);
-
-/*
- * Reset an image source format object back to the default settings.
- * 
- * See sphy_isrcfmt_new for a description of the default settings.
- * 
- * Parameters:
- * 
- *   pfmt - the format object to reset
- */
-void sphy_isrcfmt_reset(SPHY_ISRCFMT *pfmt);
-
-/*
- * Create a new audio source format with default settings.
- * 
- * This format is used to describe audio data that is being imported 
- * with sphy_audiobuf_import.
- * 
- * The default format is that channels are ordered left right, with each
- * channel sample being an unsigned 16-bit integer in range 0-65535.
- * These channel samples are copied as-is into the audio buffer.
- * 
- * The default format can be modified with other sphy_asrcfmt functions.
- * It can be reset to default with sphy_asrcfmt_reset.
- * 
- * Allocated format objects should eventually be released with
- * sphy_asrcfmt_free.
- * 
- * Return:
- * 
- *   a newly allocated audio source format with default settings
- */
-SPHY_ASRCFMT *sphy_asrcfmt_new(void);
-
-/*
- * Release the provided audio source format object.
- * 
- * The object may not be used again after this function is called.
- * 
- * If NULL is passed, the call is ignored.
- * 
- * Parameters:
- * 
- *   pfmt - the format object to free, or NULL
- */
-void sphy_asrcfmt_free(SPHY_ASRCFMT *pfmt);
-
-/*
- * Reset an audio source format object back to the default settings.
- * 
- * See sphy_asrcfmt_new for a description of the default settings.
- * 
- * Parameters:
- * 
- *   pfmt - the format object to reset
- */
-void sphy_asrcfmt_reset(SPHY_ASRCFMT *pfmt);
+sphy_u32 sphy_stereo(sphy_int left, sphy_int right);
 
 #endif
