@@ -180,4 +180,72 @@ sphy_int sphy_left(sphy_u32 stereo);
  */
 sphy_int sphy_right(sphy_u32 stereo);
 
+/*
+ * Quantize an unsigned normal component into an unsigned integer
+ * component.
+ * 
+ * The provided normal component (f) is first clamped to range 0.0 up to
+ * +1.0.  If the value is in range 0.0 to 1.0, it is left alone; if it
+ * is greater than 1.0, it is set to 1.0; if it is less than 0.0, it is
+ * set to 0.0; otherwise (such as for a NaN), it is set to 0.0.
+ * 
+ * maxval must be in range one up to and including SPHY_MAXUWORD.  The
+ * clamped normal component is then multiplied by maxval.  This result
+ * is then rounded to the nearest integer.
+ * 
+ * Finally, the rounded result is converted to an integer and clamped to
+ * the integer range zero up to and including maxval, with values less
+ * than zero set to zero and values greater than maxval set to maxval.
+ * 
+ * The return value is in range zero up to and including maxval.
+ * 
+ * Parameters:
+ * 
+ *   f - the unsigned normal component to quantize
+ * 
+ *   maxval - the maximum integer value
+ * 
+ * Return:
+ * 
+ *   the quantized unsigned value
+ */
+sphy_int sphy_quantu(sphy_float f, sphy_int maxval);
+
+/*
+ * Quantize a signed normal component into a signed integer component.
+ * 
+ * The provided normal component (f) is first clamped to range -1.0 up
+ * to +1.0.  If the value is in range -1.0 to +1.0, it is left alone; if
+ * it is greater than +1.0, it is set to +1.0; if it is less than -1.0,
+ * it is set to -1.0; otherwise (such as for a NaN), it is set to 0.0.
+ * 
+ * maxval must be in range one up to and including SPHY_MAXSWORD.  The
+ * clamped normal component is then multiplied by maxval.  This result
+ * is then rounded to the nearest integer.
+ * 
+ * Finally, the rounded result is converted to an integer and clamped to
+ * the integer range -maxval up to and including +maxval, with values
+ * less than -maxval set to -maxval and values greater than +maxval set
+ * to +maxval.
+ * 
+ * The return value is in range -maxval up to and including +maxval.
+ * 
+ * Note that in the common two's-complement representation of signed
+ * integers, the negative range goes one further than the positive range
+ * (that is, (-maxval-1) up to +maxval).  This conversion function never
+ * generates the "one further" negative value of (-maxval-1), so that
+ * the range of values is always symmetric around zero.
+ * 
+ * Parameters:
+ * 
+ *   f - the signed normal component to quantize
+ * 
+ *   maxval - the maximum integer value
+ * 
+ * Return:
+ * 
+ *   the quantized signed value
+ */
+sphy_int sphy_quants(sphy_float f, sphy_int maxval);
+
 #endif
