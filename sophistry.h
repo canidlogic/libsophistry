@@ -366,4 +366,88 @@ sphy_float sphy_normu(sphy_int i, sphy_int maxval);
  */
 sphy_float sphy_norms(sphy_int i, sphy_int maxval);
 
+/*
+ * Requantize an unsigned integer component to a different unsigned
+ * integer range.
+ * 
+ * omaxval is the original maxval that the provided integer component
+ * (i) is quantized to.  nmaxval is the new maxval that the return value
+ * should be quantized to.  Both omaxval and nmaxval must be in range
+ * one up to and including SPHY_MAXUWORD.
+ * 
+ * First, the provided integer component (i) is clamped to range zero to
+ * +omaxval by using sphy_clamp.
+ * 
+ * Second, the integer is converted to a float value and divided by
+ * omaxval to convert to an unsigned normal in range 0.0 to 1.0.
+ * 
+ * Third, the result of this operation is sent to sphy_quantu using
+ * nmaxval to convert to an unsigned integer in range zero to nmaxval.
+ * 
+ * The return value is in range zero to nmaxval.
+ * 
+ * As a special case, if omaxval and nmaxval are equal to each other,
+ * the return value is simply i clamped to range zero to nmaxval using
+ * sphy_clamp.
+ * 
+ * Parameters:
+ * 
+ *   i - the unsigned integer component to requantize
+ * 
+ *   omaxval - the original maximum integer value of i
+ * 
+ *   nmaxval - the new maximum integer value for the return value
+ * 
+ * Return:
+ * 
+ *  the requantized integer component
+ */
+sphy_int sphy_requantu(sphy_int i, sphy_int omaxval, sphy_int nmaxval);
+
+/*
+ * Requantize a signed integer component to a different signed integer
+ * range.
+ * 
+ * omaxval is the original maxval that the provided integer component
+ * (i) is quantized to.  nmaxval is the new maxval that the return value
+ * should be quantized to.  Both omaxval and nmaxval must be in range
+ * one up to and including SPHY_MAXSWORD.
+ * 
+ * First, the provided integer component (i) is clamped to range
+ * -omaxval to +omaxval by using sphy_clamp.
+ * 
+ * Second, the integer is converted to a float value and divided by
+ * omaxval to convert to a signed normal in range -1.0 to 1.0.
+ * 
+ * Third, the result of this operation is sent to sphy_quants using
+ * nmaxval to convert to a signed integer in range -nmaxval to +nmaxval.
+ * 
+ * The return value is in range -nmaxval to +nmaxval.
+ * 
+ * Note that in the common two's-complement representation of signed
+ * integers, the negative range goes one further than the positive range
+ * (that is, (-omaxval-1) up to +omaxval).  This conversion function
+ * treats the "one further" negative value of (-omaxval-1) as if it were
+ * -omaxval, so that the range of values is always symmetric around
+ * zero.  The return value will never return a "one further" negative
+ * value of (-nmaxval-1).
+ * 
+ * As a special case, if omaxval and nmaxval are equal to each other,
+ * the return value is simply i clamped to range -nmaxval to nmaxval
+ * using sphy_clamp.
+ * 
+ * Parameters:
+ * 
+ *   i - the signed integer component to requantize
+ * 
+ *   omaxval - the original maximum integer value of i
+ * 
+ *   nmaxval - the new maximum integer value for the return value
+ * 
+ * Return:
+ * 
+ *  the requantized integer component
+ */
+sphy_int sphy_requants(sphy_int i, sphy_int omaxval, sphy_int nmaxval);
+
 #endif
