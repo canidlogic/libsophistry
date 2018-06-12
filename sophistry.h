@@ -84,4 +84,100 @@ sphy_u32 sphy_argb(sphy_int a, sphy_int r, sphy_int g, sphy_int b);
  */
 sphy_u32 sphy_stereo(sphy_int left, sphy_int right);
 
+/*
+ * Unpack the alpha channel from the provided 32-bit image sample.
+ * 
+ * The return value will be in range zero up to and including
+ * SPHY_MAXBYTE.
+ * 
+ * Parameters:
+ * 
+ *   argb - the packed image sample
+ * 
+ * Return:
+ * 
+ *   the alpha channel
+ */
+sphy_int sphy_a(sphy_u32 argb);
+
+/*
+ * Unpack the red channel from the provided 32-bit image sample.
+ * 
+ * The return value will be in range zero up to and including
+ * SPHY_MAXBYTE.
+ * 
+ * Parameters:
+ * 
+ *   argb - the packed image sample
+ * 
+ * Return:
+ * 
+ *   the red channel
+ */
+sphy_int sphy_r(sphy_u32 argb);
+
+/*
+ * Unpack the green channel from the provided 32-bit image sample.
+ * 
+ * The return value will be in range zero up to and including
+ * SPHY_MAXBYTE.
+ * 
+ * Parameters:
+ * 
+ *   argb - the packed image sample
+ * 
+ * Return:
+ * 
+ *   the green channel
+ */
+sphy_int sphy_g(sphy_u32 argb);
+
+/*
+ * Unpack the blue channel from the provided 32-bit image sample.
+ * 
+ * The return value will be in range zero up to and including
+ * SPHY_MAXBYTE.
+ * 
+ * Parameters:
+ * 
+ *   argb - the packed image sample
+ * 
+ * Return:
+ * 
+ *   the blue channel
+ */
+sphy_int sphy_b(sphy_u32 argb);
+
+/*
+ * Unpack the left channel from the provided 32-bit audio sample.
+ * 
+ * The return value will be in range SPHY_MINSWORD up to and including
+ * SPHY_MAXSWORD.
+ * 
+ * Parameters:
+ * 
+ *   stereo - the packed audio sample
+ * 
+ * Return:
+ * 
+ *   the left channel
+ */
+sphy_int sphy_left(sphy_u32 stereo);
+
+/*
+ * Unpack the right channel from the provided 32-bit audio sample.
+ * 
+ * The return value will be in range SPHY_MINSWORD up to and including
+ * SPHY_MAXSWORD.
+ * 
+ * Parameters:
+ * 
+ *   stereo - the packed audio sample
+ * 
+ * Return:
+ * 
+ *   the right channel
+ */
+sphy_int sphy_right(sphy_u32 stereo);
+
 #endif
