@@ -1,8 +1,22 @@
 # libsophistry
-This library defines a common image scanline and a common audio buffer format.  This library is meant for use by image, video, and audio codecs, so that the codecs can each share the same buffer objects to transfer image and audio data to and from multimedia data files.  libsophistry does not define any codecs on its own, focusing purely on the definition of objects used to get multimedia data in and out of multimedia files.
+This library defines a 32-bit image and audio sample format.  Functions are provided to pack and unpack channels from the 32-bit samples, and convert between various component formats.
 
-The image scanline defined by libsophistry supports a width in pixels from one up to and including 268,435,456 pixels.  Each pixel is a 32-bit unsigned integer that encodes 8-bit alpha, red, green, and blue channels in ARGB order from most significant byte to least significant byte.  The alpha channel is zero for fully transparent, 255 for fully opaque, and linear in between.  The RGB channels vary from zero for no intensity to 255 for full intensity.  The nonlinear encoding (gamma correction) of the RGB channels is equivalent to the sRGB standard.  The RGB primaries definitions and D65 whitepoint are equivalent to both the sRGB standard and the ITU-R BT.709-6 ("Rec. 709") standard.  The alpha channel is non-premultiplied with respect to the RGB channels.
+The 32-bit image sample format consists of an alpha (A), red (R), green (G), and blue (B) channel packed into a 32-bit unsigned integer.  Each color channel is an unsigned 8-bit integer, in range zero to 255.  The order of channels is ARGB from most significant byte to least significant byte within the 32-bit unsigned integer.
 
-The audio buffer defined by libsophistry supports from one up to and including 268,435,456 samples.  Each sample is a 32-bit unsigned integer that encodes a 16-bit left channel and a 16-bit right channel, with the left channel in the 16 most significant bits and the right channel in the 16 least significant bits.  Channels are encoded such that zero is the lowest value and 65,535 is the highest value.  In order to convert channels to Linear Pulse Code Modulation (Linear PCM or LPCM), subtract the channel by 32,768, such that channel value zero maps to LPCM value -32,768, channel value 32,768 maps to LPCM value zero, and channel value 65,535 maps to LPCM value 32,767.
+The 32-bit audio sample format consists of a left channel and a right channel packed into a 32-bit unsigned integer.  Each channel is stored as an unsigned 16-bit integer, in range zero to 65535.  However, the channel values are converted to signed range -32768 to +32767 when the sample is unpacked.  The left channel is stored in the most significant 16 bits, while the right channel is stored in the least significant 16 bits.
 
-libsophistry also supports auxiliary functions to aid in converting from the image scanline and audio buffer formats used by Sophistry into other common formats.  This is intended for codecs that have image or audio data in a different format.
+libsophistry also provides functions to convert between sample component formats.  The supported component formats are:
+
+Format           | Type    | Minimum value | Maximum value
+-----------------|---------|---------------|--------------
+Unsigned integer | Integer | 0             | +MAXVAL
+Signed integer   | Integer | -MAXVAL-1     | +MAXVAL
+Unsigned normal  | Float   | 0.0           | +1.0
+Signed normal    | Float   | -1.0          | +1.0
+
+MAXVAL can have any value from one up to 65535.  libsophistry also supports converting between integer formats with different MAXVAL values.
+
+libsophistry does not specify the exact meaning of the RGB channels, the interpretation of the alpha channel, nor the exact meaning of the audio sample values.  libsophistry limits itself to only the low-level packing and unpacking operations, as well as the basic component format conversions.
+
+## Compilation
+If <stdint.h> is not available or if not all the standard definitions are present, then there may be compilation errors related to the basic type definitions.  If this is the case, then adjust the sophistry.h header type declarations to remove the <stdint.h> header if the compiler does not support it, and rewrite the declarations to use the types appropriate for the particular compiler.
