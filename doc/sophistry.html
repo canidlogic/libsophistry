@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Sophistry README</title>
+    <style>
+
+body {
+  margin: auto;
+  padding-left: 1em;
+  padding-right: 1em;
+  max-width: 40em;
+  font-family: sans-serif;
+}
+
+:link {
+  text-decoration: none;
+  color: blue
+}
+
+:visited {
+  text-decoration: none;
+  color: blue
+}
+
+    </style>
+  </head>
+  <body>
+
+<h1>Sophistry README</h1>
+
+<p><i>Written by Noah Johnson</i><br/>
+<tt><a href="https://www.canidlogic.com/">www.canidlogic.com</a></tt><br/>
+<tt>noah.johnson@loupmail.com</tt><br/>
+<tt>2019-06-25 / 3Y:35-2</tt></p>
+
+<h2>1. Introduction</h2>
+
+<p>Sophistry is a C library for reading and writing standard multimedia formats.  Currently, only the PNG image format is supported, but read/write support for JPEG, WAV, and M-JPEG is planned, along with write-only support for MIDI.</p>
+
+<h2>2. Image module</h2>
+
+<p>The image module allows PNG image files to be read and written (in the future, also JPEG).  Images are always read scanline-by-scanline from top to bottom with pixels in scanlines proceeding left to right.  The scanline reading approach means that full images do not need to be loaded into memory all at once.</p>
+
+<p>The following three scanline formats are supported:</p>
+
+<ol>
+<li>ARGB</li>
+<li>RGB</li>
+<li>Grayscale</li>
+</ol>
+
+<p>In the <b>ARGB</b> format, each pixel is a 32-bit unsigned integer.  The alpha channel is the eight most significant bits, then an 8-bit red channel, an 8-bit green channel, and the eight least significant bits are the blue channel.  The alpha channel is non-premultiplied and has a linear scale.</p>
+
+<p>In the <b>RGB</b> format, each pixel is a 32-bit unsigned integer.  The format is the same as ARGB, except that the alpha field is always set to zero when data is read and always ignored when data is written.</p>
+
+<p>In the ARGB and RGB formats, the RGB channels should be assumed to be sRGB.  Sophistry does not currently support any color management, so images in non-sRGB color spaces will be handled as if they were sRGB.  Color channels are non-linear, according to the sRGB standard.</p>
+
+<p>In the <b>grayscale</b> format, each pixel is an 8-bit unsigned integer, where zero is black and 255 is white.  The channel should be assumed to be non-linear in the same way as sRGB color components.</p>
+
+<h3>2.1 Color conversion</h3>
+
+<p>Sophistry is able to automatically convert between RGB and grayscale.  For example, when the client requests that a grayscale scanline be read but the input file is an RGB format, Sophistry automatically converts the RGB data to grayscale.</p>
+
+<p>Conversion <b>from grayscale to RGB</b> works by setting each RGB channel equal to the grayscale value.</p>
+
+<p>Conversion <b>from RGB to grayscale</b> is more complicated.  Theoretically, each RGB channel should be made linear before transformation to arrive at the luminance, but for efficiency Sophistry simply uses a luma function directly on the non-linear components.  The luma function is found in ITU Recommendation <a href="https://www.itu.int/rec/R-REC-BT.709/en">ITU-R BT.709</a>.  (sRGB works the same as BT.709 in this case since both have the same primaries.)  The luma (Y) function is:</p>
+
+<blockquote>
+Y&nbsp;= 0.2126&nbsp;<i>R</i>&nbsp;+ 0.7152&nbsp;<i>G</i>&nbsp;+ 0.0722&nbsp;<i>B</i>
+</blockquote>
+
+<p>Sophistry also makes these conversion functions available to clients.  See the interface in the header for specifics.</p>
+
+<h3>2.2 Alpha conversion</h3>
+
+<p>Sophistry is able to automatically convert between transparent, alpha-channel formats and non-transparent formats that lack an alpha channel.  For example, when the client requests that a scanline with an alpha channel be written but the output format lacks the ability to store an alpha channel, Sophistry automatically processes the scanline to merge the alpha information into the color channels.</p>
+
+<p>In order to <b>add an alpha channel</b> Sophistry simply sets all alpha channel values to 255, meaning fully opaque.</p>
+
+<p>The process of <b>removing an alpha channel</b> is more complicated.  The client must provide a <i>background color</i> that is fully opaque.  Each pixel that is fully transparent is replaced by the fully opaque background color.  Each pixel that is fully opaque is left unchanged.  Each partially transparent pixel is mixed against the fully opaque background color, resulting in a fully opaque color.  Since all resulting colors have then been made fully opaque, the alpha channel can safely be dropped.</p>
+
+<p>Mixing partially transparent pixels against an opaque background color is complicated by the requirement that mixing be done in linear space.  During mixing, Sophistry must first convert the two colors such that they have linear component values, then mixing is performed, and then the mixed component values are converted back to non-linear sRGB component values.</p>
+
+<hr/>
+<h2>5. Compilation</h2>
+
+<p>Compile with libpng.  <tt>-lpng</tt> might work for this.  libpng depends on zlib, though Sophistry does not directly use zlib.</p>
+
+<p style="margin-top: 2.5em;">&nbsp;</p>
+
+  </body>
+</html>
