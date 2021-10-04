@@ -36,54 +36,97 @@ body {
 
 <h2>1. Introduction</h2>
 
-<p>Sophistry is a C library for reading and writing standard multimedia formats.  Currently, only the PNG image format is supported, but read/write support for JPEG, WAV, and M-JPEG is planned, along with write-only support for MIDI.</p>
+<p>Sophistry is a C library for reading and writing standard multimedia formats.  Sophistry supports image files, audio files, video files, and music files:</p>
 
-<h2>2. Image module</h2>
+<ul>
+<li><i>Image formats:</i> PNG, JPEG</li>
+<li><i>Audio formats:</i> WAV</li>
+<li><i>Video formats:</i> M-JPEG</li>
+<li><i>Music formats:</i> MIDI</li>
+</ul>
 
-<p>The image module allows PNG image files to be read and written (in the future, also JPEG).  Images are always read scanline-by-scanline from top to bottom with pixels in scanlines proceeding left to right.  The scanline reading approach means that full images do not need to be loaded into memory all at once.</p>
+<p>MIDI support is write-only.  Sophistry depends on external libraries for PNG and JPEG codecs, but implements all the other codecs.  There are limitations, noted in the section below.</p>
 
-<p>The following three scanline formats are supported:</p>
+<h2>2. Limitations</h2>
 
-<ol>
-<li>ARGB</li>
-<li>RGB</li>
-<li>Grayscale</li>
-</ol>
+<p><i>Sophistry is currently in an early development stage, and only supports PNG files at the moment.</i></p>
 
-<p>In the <b>ARGB</b> format, each pixel is a 32-bit unsigned integer.  The alpha channel is the eight most significant bits, then an 8-bit red channel, an 8-bit green channel, and the eight least significant bits are the blue channel.  The alpha channel is non-premultiplied and has a linear scale.</p>
+<p>Sophistry can neither read nor write image files that are interlaced or formatted for progressive display.  Sophistry also has no support for image files that have 12-bit or 16-bit channels, or any other depth beyond 8-bit channels.  The width and height of an image file must each be at least one and no greater than one million.</p>
 
-<p>In the <b>RGB</b> format, each pixel is a 32-bit unsigned integer.  The format is the same as ARGB, except that the alpha field is always set to zero when data is read and always ignored when data is written.</p>
+<h2>3. Image module</h2>
 
-<p>In the ARGB and RGB formats, the RGB channels should be assumed to be sRGB.  Sophistry does not currently support any color management, so images in non-sRGB color spaces will be handled as if they were sRGB.  Color channels are non-linear, according to the sRGB standard.</p>
+<p>The image module allows PNG and JPEG image files to be read and written.  Images are always read scanline-by-scanline from top to bottom with pixels in scanlines proceeding left to right.  The scanline reading approach means that full images do not need to be loaded into memory all at once.</p>
 
-<p>In the <b>grayscale</b> format, each pixel is an 8-bit unsigned integer, where zero is black and 255 is white.  The channel should be assumed to be non-linear in the same way as sRGB color components.</p>
+<p>Scanlines are always in an ARGB format.  Each pixel is a 32-bit unsigned integer.  The alpha channel is the eight most significant bits, then an 8-bit red channel, an 8-bit green channel, and the eight least significant bits are the blue channel.  The alpha channel is non-premultiplied and has a linear scale.  The RGB channels should be assumed to be sRGB.  Sophistry does not currently support any color management, so images in non-sRGB color spaces will be handled as if they were sRGB.  Color channels are non-linear, according to the sRGB standard.</p>
 
-<h3>2.1 Color conversion</h3>
+<p>If the input image is not in an ARGB format, it will be <i>up-converted</i> according to the methods described in the following subsection.  On output, the client has the option to <i>down-convert</i> to a simpler color format, as described in a later subsection.  JPEG output requires down-conversion, because JPEG does not support alpha channels.</p>
 
-<p>Sophistry is able to automatically convert between RGB and grayscale.  For example, when the client requests that a grayscale scanline be read but the input file is an RGB format, Sophistry automatically converts the RGB data to grayscale.</p>
+<h3>3.1 Up-conversion</h3>
 
-<p>Conversion <b>from grayscale to RGB</b> works by setting each RGB channel equal to the grayscale value.</p>
+<p>If the input image lacks an alpha channel, an alpha channel will automatically be added that has every alpha channel value set to fully opaque (255).</p>
 
-<p>Conversion <b>from RGB to grayscale</b> is more complicated.  Theoretically, each RGB channel should be made linear before transformation to arrive at the luminance, but for efficiency Sophistry simply uses a luma function directly on the non-linear components.  The luma function is found in ITU Recommendation <a href="https://www.itu.int/rec/R-REC-BT.709/en">ITU-R BT.709</a>.  (sRGB works the same as BT.709 in this case since both have the same primaries.)  The luma (Y) function is:</p>
+<p>If the input image is grayscale rather than RGB, the grayscale value will duplicated across all three RGB channels to convert the image to RGB.</p>
+
+<p>Sophistry also makes the up-conversion functions available for use by clients.</p>
+
+<h3>3.2 Down-conversion</h3>
+
+<p>On output, the client has the option to <i>down-convert</i> to a simpler color format.  Two down-conversions are supported:</p>
+
+<ul>
+<li><b>RGB down-conversion:</b> make the alpha channel fully opaque so it may be removed in the output image.</li>
+<li><b>Grayscale down-conversion:</b> apply RGB down-conversion, and then merge the RGB channels into a single grayscale channel.</li>
+</ul>
+
+<p>For JPEG output, the client <i>must</i> use one of these down-conversion methods, because JPEG does not support an alpha channel.</p>
+
+<p>Sophistry also makes the down-conversion functions available for use by clients.</p>
+
+<h4>3.2.1 RGB down-conversion</h4>
+
+<p>RGB down-conversion is achieved by the following method.  Each fully transparent pixel is replaced by a fully opaque pixel with a pure white color.  Each fully opaque pixel is left as-is.  Each partially transparent pixel has its color channels adjusted in the following manner:</p>
 
 <blockquote>
-Y&nbsp;= 0.2126&nbsp;<i>R</i>&nbsp;+ 0.7152&nbsp;<i>G</i>&nbsp;+ 0.0722&nbsp;<i>B</i>
+<i>result</i>&nbsp;= 255&nbsp;+ ((<i>alpha</i>&nbsp;&times; (<i>v</i>&nbsp;&ndash; 255))&nbsp&divide;&nbsp;255)
 </blockquote>
 
-<p>Sophistry also makes these conversion functions available to clients.  See the interface in the header for specifics.</p>
+<p>This transformation is applied to each color channel separately, where <i>v</i> is the original channel value, <i>alpha</i> is the alpha channel value, and <i>result</i> is the transformed channel value.  Each variable is an integer value in range zero up to and including 255, and the result is also in range zero up to and including 255.</p>
 
-<h3>2.2 Alpha conversion</h3>
+<p>The result of this transformation is similar to layering the partially transparent pixel on top of a fully opaque background of pure white.  The equation is derived from the general alpha compositing equation, with the &ldquo;under&rdquo; color assumed to be opaque white, and the constants adjusted so that integer arithmetic can be used.  The alpha channel can be set to fully opaque after all RGB channels have been transformed in this manner.</p>
 
-<p>Sophistry is able to automatically convert between transparent, alpha-channel formats and non-transparent formats that lack an alpha channel.  For example, when the client requests that a scanline with an alpha channel be written but the output format lacks the ability to store an alpha channel, Sophistry automatically processes the scanline to merge the alpha information into the color channels.</p>
+<p>However, the equation given above does not take into account the non-linear gamma encoding of the color channels.  A better quality result can be achieved by performing this operation in linear color space.  Clients may implement this compositing themselves to remove the partially transparent pixels before passing the data to Sophistry, if they desire higher-quality color mixing.</p>
 
-<p>In order to <b>add an alpha channel</b> Sophistry simply sets all alpha channel values to 255, meaning fully opaque.</p>
+<p>The transformations described in this subsection result in all output colors having a fully opaque alpha channel.  The alpha channel can then be safely dropped.</p>
 
-<p>The process of <b>removing an alpha channel</b> is more complicated.  The client must provide a <i>background color</i> that is fully opaque.  Each pixel that is fully transparent is replaced by the fully opaque background color.  Each pixel that is fully opaque is left unchanged.  Each partially transparent pixel is mixed against the fully opaque background color, resulting in a fully opaque color.  Since all resulting colors have then been made fully opaque, the alpha channel can safely be dropped.</p>
+<h4>3.2.2 Grayscale down-conversion</h4>
 
-<p>Mixing partially transparent pixels against an opaque background color is complicated by the requirement that mixing be done in linear space.  During mixing, Sophistry must first convert the two colors such that they have linear component values, then mixing is performed, and then the mixed component values are converted back to non-linear sRGB component values.</p>
+<p>Grayscale down-conversion begins by first applying RGB down-conversion, as described in the previous subsection.  Once that process is complete, only the RGB channels are left.</p>
 
-<hr/>
-<h2>5. Compilation</h2>
+<p>Sophistry merges the three RGB channels into a single grayscale channel by applying the following formula:</p>
+
+<blockquote>
+<i>gray</i>&nbsp;= (2126&nbsp;&times;&nbsp;<i>r</i>&nbsp;+ 7152&nbsp;&times;&nbsp;<i>g</i>&nbsp;+ 722&nbsp;&times;&nbsp;<i>b</i>)&nbsp;&divide;&nbsp;10000
+</blockquote>
+
+<p>This formula is the luma function found in ITU Recommendation <a href="https://www.itu.int/rec/R-REC-BT.709/en">ITU-R BT.709</a>, adjusted so that it uses integer arithmetic.  (sRGB works the same as BT.709 in this case since both color systems have the same RGB primaries.)  The luma function is an approximation of luminance.  Luma does not take into account the non-linear gamma encoding of the RGB color channels.  Clients that desire actual luminance may perform this operation themselves on the RGB data first.  Sophistry will not apply the above transformation to pixels that already have equal values for all RGB channels, instead simply setting the grayscale value equal to the shared channel value.</p>
+
+<h3>3.3 Image module architecture</h3>
+
+<p>In order to use the image module, the client creates <i>image reader</i> and <i>image writer</i> objects.  The objects allow information about the image files as well as the individual scanlines to be transferred between Sophistry and the client.  Reading and writing operations are always fully sequential.  Clients that require random access must either store the entire image in memory or implement some image data cache.</p>
+
+<p>The reader and writer objects both require a <i>stdio</i> handle for the image file.  Wrapper methods are provided so that a file path can be passed directly.  File handles are always closed at the end of the read or write operation.</p>
+
+<p>The reader and writer objects both also require an image file type.  Sophistry only supports PNG and JPEG image files.  The wrapper methods that accept a file path will determine the image file type automatically from the file extension:  case-insensitive matches for <tt>.JPG</tt> and <tt>.JPEG</tt> at the end of the file path indicate a JPEG file, while case-insensitive matches for <tt>.PNG</tt> indicate a PNG file.</p>
+
+<p>The writer object additionally requires the client to specify the desired width and height of the image in pixels, as well as whether down-conversion is requested.  Allowable down-conversion settings are:  <i>none,</i> <i>RGB,</i> or <i>grayscale.</i>  (See earlier for definitions of down-conversion.)  JPEG writers <i>must</i> specify down-conversion of either RGB or grayscale, since JPEG files lack alpha channels.</p>
+
+<p>JPEG writers also allow the client to indicate the compression quality, on a range of zero to 100, where zero is most compression (worst image quality) and 100 is least compression (best image quality).  If not specified, Sophistry assumes a compression quality of 90.  PNG writers ignore the compression quality setting.</p>
+
+<p>Once a reader object is created, the width and height of the image can be queried, and the client can read the image scanline by scanline.  Once a writer object is creater, the client can write the image scanline by scanline.</p>
+
+<p>Readers and writers may be closed at any time, which also closes the file they are associated with.  However, if a writer is closed before all scanlines have been written, the resulting image file will be invalid.</p>
+
+<h2>4. Compilation</h2>
 
 <p>Compile with libpng.  <tt>-lpng</tt> might work for this.  libpng depends on zlib, though Sophistry does not directly use zlib.</p>
 
