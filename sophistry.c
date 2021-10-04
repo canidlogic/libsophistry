@@ -920,7 +920,8 @@ SPH_IMAGE_WRITER *sph_image_writer_newFromPath(
           int32_t   w,
           int32_t   h,
           int       dconv,
-          int       q) {
+          int       q,
+          int     * pError) {
   
   int ftype = 0;
   int status = 1;
@@ -937,6 +938,9 @@ SPH_IMAGE_WRITER *sph_image_writer_newFromPath(
   
   /* Fail if type could not be determined */
   if (ftype == -1) {
+    if (pError != NULL) {
+      *pError = SPH_IMAGE_ERR_FILETYPE;
+    }
     status = 0;
   }
   
@@ -944,6 +948,9 @@ SPH_IMAGE_WRITER *sph_image_writer_newFromPath(
   if (status) {
     pOut = fopen(pPath, "wb");
     if (pOut == NULL) {
+      if (pError != NULL) {
+        *pError = SPH_IMAGE_ERR_OPEN;
+      }
       status = 0;
     }
   }
@@ -959,6 +966,13 @@ SPH_IMAGE_WRITER *sph_image_writer_newFromPath(
   /* Call through if no error */
   if (status) {
     pw = sph_image_writer_new(pOut, ftype, w, h, dconv, q);
+  }
+  
+  /* If successful, clear error if it was passed */
+  if (status) {
+    if (pError != NULL) {
+      *pError = SPH_IMAGE_ERR_NONE;
+    }
   }
   
   /* Return writer or NULL */
@@ -1116,7 +1130,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
   
   /* Set error to unknown in case we need to leave from a longjmp */
   if (pError != NULL) {
-    *pError = SPH_IMAGE_RERR_UNKNOWN;
+    *pError = SPH_IMAGE_ERR_UNKNOWN;
   }
   
   /* Read header information and initialize codecs */
@@ -1167,7 +1181,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
     if (status) {
       if ((w > SPH_IMAGE_MAXDIM) || (h > SPH_IMAGE_MAXDIM)) {
         if (pError != NULL) {
-          *pError = SPH_IMAGE_RERR_IMAGEDIM;
+          *pError = SPH_IMAGE_ERR_IMAGEDIM;
         }
         status = 0;
       }
@@ -1177,7 +1191,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
     if (status) {
       if (imethod != PNG_INTERLACE_NONE) {
         if (pError != NULL) {
-          *pError = SPH_IMAGE_RERR_INTERLACED;
+          *pError = SPH_IMAGE_ERR_INTERLACED;
         }
         status = 0;
       }
@@ -1187,7 +1201,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
     if (status) {
       if (bdepth > 8) {
         if (pError != NULL) {
-          *pError = SPH_IMAGE_RERR_BITDEPTH;
+          *pError = SPH_IMAGE_ERR_BITDEPTH;
         }
         status = 0;
       }
@@ -1356,7 +1370,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
   /* If successful, set error to NONE */
   if (status) {
     if (pError != NULL) {
-      *pError = SPH_IMAGE_RERR_NONE;
+      *pError = SPH_IMAGE_ERR_NONE;
     }
   }
   
@@ -1387,7 +1401,7 @@ SPH_IMAGE_READER *sph_image_reader_newFromPath(
   /* Fail if type could not be determined */
   if (ftype == -1) {
     if (pError != NULL) {
-      *pError = SPH_IMAGE_RERR_FILETYPE;
+      *pError = SPH_IMAGE_ERR_FILETYPE;
     }
     status = 0;
   }
@@ -1397,7 +1411,7 @@ SPH_IMAGE_READER *sph_image_reader_newFromPath(
     pIn = fopen(pPath, "rb");
     if (pIn == NULL) {
       if (pError != NULL) {
-        *pError = SPH_IMAGE_RERR_UNKNOWN;
+        *pError = SPH_IMAGE_ERR_OPEN;
       }
       status = 0;
     }
@@ -1486,13 +1500,19 @@ int32_t sph_image_reader_height(SPH_IMAGE_READER *pr) {
 /*
  * sph_image_reader_read function.
  */
-uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pReadErr) {
+uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pError) {
   
   int status = 1;
+  uint32_t *pResult = NULL;
   
   /* Check parameter */
   if (pr == NULL) {
     abort();
+  }
+  
+  /* Clear the error code if provided */
+  if (pError != NULL) {
+    *pError = SPH_IMAGE_ERR_NONE;
   }
   
   /* Only proceed if not in error mode */
@@ -1537,13 +1557,12 @@ uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pReadErr) {
         }
       }
       
-      /* If error, set error flag if it was passed, set internal error
-       * mode, and clear the buffer */
+      /* If error, set error code if it was passed and set internal
+       * error mode */
       if (!status) {
-        if (pReadErr != NULL) {
-          *pReadErr = 1;
+        if (pError != NULL) {
+          *pError = SPH_IMAGE_ERR_READDATA;
         }
-        memset(pr->pScan, 0, ((size_t) pr->w) * sizeof(uint32_t));
         pr->err_flag = 1;
       }
     
@@ -1557,14 +1576,64 @@ uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pReadErr) {
     }
   
   } else {
-    /* In error mode -- set error flag if it was passed and clear the
-     * buffer */
-    if (pReadErr != NULL) {
-      *pReadErr = 1;
+    /* In error mode -- set error flag if it was passed and fail */
+    if (pError != NULL) {
+      *pError = SPH_IMAGE_ERR_READDATA;
     }
-    memset(pr->pScan, 0, ((size_t) pr->w) * sizeof(uint32_t));
+    status = 0;
+  }
+  
+  /* Return scanline buffer pointer if successful, NULL if error */
+  if (status) {
+    pResult = pr->pScan;
+  } else {
+    pResult = NULL;
   }
   
   /* Always return pointer to scanline buffer */
-  return pr->pScan;
+  return pResult;
+}
+
+/*
+ * sph_image_errorString function.
+ */
+const char *sph_image_errorString(int code) {
+  
+  const char *result = NULL;
+  
+  switch (code) {
+    
+    case SPH_IMAGE_ERR_NONE:
+      result = "No error";
+      break;
+      
+    case SPH_IMAGE_ERR_INTERLACED:
+      result = "Interlaced or progressive images are not supported";
+      break;
+    
+    case SPH_IMAGE_ERR_BITDEPTH:
+      result = "Images with 12-bit or 16-bit channels are unsupported";
+      break;
+    
+    case SPH_IMAGE_ERR_IMAGEDIM:
+      result = "Image width or height is too large";
+      break;
+    
+    case SPH_IMAGE_ERR_FILETYPE:
+      result = "Image file path missing a recognized image extension";
+      break;
+    
+    case SPH_IMAGE_ERR_OPEN:
+      result = "Could not open image file path";
+      break;
+    
+    case SPH_IMAGE_ERR_READDATA:
+      result = "Error while reading image data";
+      break;
+    
+    default:
+      result = "Unknown image file I/O error";
+  }
+  
+  return result;
 }
