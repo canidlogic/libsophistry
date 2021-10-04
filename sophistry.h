@@ -30,13 +30,15 @@ typedef struct SPH_IMAGE_READER_TAG SPH_IMAGE_READER;
 #define SPH_IMAGE_DOWN_RGB  (1)   /* RGB down-conversion */
 #define SPH_IMAGE_DOWN_GRAY (2)   /* Grayscale down-conversion */
 
-/* Image reader errors */
-#define SPH_IMAGE_RERR_UNKNOWN   (-1) /* Unknown error */
-#define SPH_IMAGE_RERR_NONE       (0) /* No error */
-#define SPH_IMAGE_RERR_INTERLACED (1) /* Interlaced or progressive */
-#define SPH_IMAGE_RERR_BITDEPTH   (2) /* Bit depth too high */
-#define SPH_IMAGE_RERR_IMAGEDIM   (3) /* Dimensions too large */
-#define SPH_IMAGE_RERR_FILETYPE   (4) /* Can't determine file type */
+/* Image errors */
+#define SPH_IMAGE_ERR_UNKNOWN   (-1) /* Unknown error */
+#define SPH_IMAGE_ERR_NONE       (0) /* No error */
+#define SPH_IMAGE_ERR_INTERLACED (1) /* Interlaced or progressive */
+#define SPH_IMAGE_ERR_BITDEPTH   (2) /* Bit depth too high */
+#define SPH_IMAGE_ERR_IMAGEDIM   (3) /* Dimensions too large */
+#define SPH_IMAGE_ERR_FILETYPE   (4) /* Can't determine file type */
+#define SPH_IMAGE_ERR_OPEN       (5) /* Can't open file */
+#define SPH_IMAGE_ERR_READDATA   (6) /* Error reading data */
 
 /*
  * A structure holding a parsed ARGB color.
@@ -261,6 +263,10 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
  * passed dconv is for NONE, it is automatically changed to RGB
  * down-conversion because JPEG must use down-conversion.
  * 
+ * If pError is provided, then it will always be filled in upon return
+ * either with an error code (if the function fails) or with zero
+ * (SPH_IMAGE_ERR_NONE) if the function is successful.
+ * 
  * See sph_image_writer_new() for further information.
  * 
  * Parameters:
@@ -275,6 +281,8 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
  * 
  *   q - the compression quality
  * 
+ *   pError - pointer to error return, or NULL
+ * 
  * Return:
  * 
  *   the new image writer object, or NULL
@@ -284,7 +292,8 @@ SPH_IMAGE_WRITER *sph_image_writer_newFromPath(
           int32_t   w,
           int32_t   h,
           int       dconv,
-          int       q);
+          int       q,
+          int     * pError);
 
 /*
  * Close a given image writer object.
@@ -381,7 +390,7 @@ void sph_image_writer_write(SPH_IMAGE_WRITER *pw);
  * 
  * If there is an error, NULL is returned.  If pError is not NULL, then
  * an error code will be written there on failure, or a zero error
- * (SPH_IMAGE_RERR_NONE) on success.  If an error occurs, the file
+ * (SPH_IMAGE_ERR_NONE) on success.  If an error occurs, the file
  * handle will be closed by this function.
  * 
  * Parameters:
@@ -424,7 +433,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
  * ====================================================================
  * 
  * The pError parameter is passed through as-is.  This function may
- * return SPH_IMAGE_RERR_FILETYPE error if the file extension couldn't
+ * return SPH_IMAGE_ERR_FILETYPE error if the file extension couldn't
  * be recognized.
  * 
  * See sph_image_reader_new() for further information.
@@ -509,23 +518,45 @@ int32_t sph_image_reader_height(SPH_IMAGE_READER *pr);
  * are read from top to bottom, and within scanlines pixels go from left
  * to right.
  * 
- * This function will always return a pointer to a scanline buffer.  If
- * there is a read error, then the scanline buffer will have completely
- * blanked contents.  *pReadErr, if provided, will be set to one if
- * there is a read error, else cleared to zero if there is no error.
- * Once a read error occurs, all subsequent reads from the file will
- * also be errors.  pReadErr may be NULL.
+ * If there is a read error, NULL will be returned.  All subsequent
+ * reads from the file after a read error occurs will also result in
+ * read errors.
+ * 
+ * pError, if provided, will be set to an error code if there is an
+ * error, or zero (SPH_IMAGE_ERR_NONE) if there was no error.
  * 
  * Parameters:
  * 
  *   pr - the image reader object
  * 
- *   pReadError - pointer to the reading error flag, or NULL
+ *   pError - pointer to the error code return, or NULL
  * 
  * Return:
  * 
- *   pointer to the scanline buffer
+ *   pointer to the scanline buffer, or NULL if read error
  */
-uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pReadErr);
+uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pError);
+
+/*
+ * Given an SPH_IMAGE_ERR error code, return a string describing the
+ * error.
+ * 
+ * SPH_IMAGE_ERR_NONE returns a string indicating no error.  All
+ * unrecognized codes and SPH_IMAGE_ERR_UNKNOWN return a string saying
+ * that an unknown image error occurred.  Each recognized code has its
+ * own descriptive string.
+ * 
+ * The error strings are all in English, first letter capitalized, no
+ * punctuation at the end of the string, and no line break.
+ * 
+ * Parameters:
+ * 
+ *   code - the image error code to look up
+ * 
+ * Return:
+ * 
+ *   a string description of the image error code
+ */
+const char *sph_image_errorString(int code);
 
 #endif
