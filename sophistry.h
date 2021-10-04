@@ -4,450 +4,685 @@
 /*
  * sophistry.h
  * 
- * Header for the Sophistry library, which defines a 32-bit image and
- * audio sample format.
+ * An image codec library based on the PNG image format.
  * 
- * See the README.md document for further information.
+ * All declarations have a prefix that is a case-insensitive match for
+ * "sphi"
  */
 
+#include <stdbool.h>
 #include <stddef.h>
-
-/*
- * The basic type declarations.
- * 
- * If <stdint.h> is not supported by the compiler, then comment that
- * line out and rewrite the typedefs so they use the appropriate types
- * for the compiler.
- * 
- * If some of the standard definitions used by the typedefs are missing,
- * then rewrite the typedefs to use the definitions appropriate for the
- * compiler.
- */
 #include <stdint.h>
-typedef uint32_t sphy_u32  ;  /* Unsigned integer, exactly  32-bit */
-typedef int32_t  sphy_int  ;  /* Signed   integer, at least 32-bit */
-typedef float    sphy_float;  /* Floating-point type               */
 
 /*
- * The basic limits.
- */
-#define SPHY_MAXBYTE  (              255 )  /* Max unsigned  8-bit */
-#define SPHY_MAXUWORD ((sphy_int)  65535L)  /* Max unsigned 16-bit */
-#define SPHY_MAXSWORD ((sphy_int)  32767L)  /* Max   signed 16-bit */
-#define SPHY_MINSWORD ((sphy_int) -32768L)  /* Min   signed 16-bit */
-
-/*
- * Pack ARGB channels into a 32-bit image sample.
+ * The maximum dimension allowed for width and height.
  * 
- * Each provided channel is clamped to range zero to SPHY_MAXBYTE using
- * sphy_clamp.
+ * This is chosen to allow width and height to be multiplied together
+ * without having to worry about overflow in signed 32-bit range.
+ */
+#define SPHI_MAXDIM (32000)
+
+/*
+ * Sample count constants.
+ * 
+ * This indicates the total number of color channels, which is always in
+ * range [1..4].  The first set of constants gives the color
+ * interpretations for each sample count, but note that a sample count
+ * of one has two interpretations, depending on whether there is a color
+ * palette (no palette means grayscale, while a palette means indexed
+ * color).
+ * 
+ * The MIN and MAX constants give the full range of possible sample
+ * count values.
+ */
+#define SPHI_SACOUNT_GRAY    (1)	/* Grayscale                 */
+#define SPHI_SACOUNT_INDEXED (1)	/* Indexed color             */
+#define SPHI_SACOUNT_GRAYA   (2)	/* Grayscale with alpha      */
+#define SPHI_SACOUNT_RGB     (3)	/* Red/Green/Blue            */
+#define SPHI_SACOUNT_RGBA    (4)	/* Red/Green/Blue with alpha */
+
+#define SPHI_SACOUNT_MIN     (1)
+#define SPHI_SACOUNT_MAX     (4)
+
+/*
+ * Sample depth constants.
+ * 
+ * These are the allowable bit depths for each color channel.  Only the
+ * values given in the constants below are supported.
+ */
+#define SPHI_SADEPTH_1		(1 )	/*  1-bit */
+#define SPHI_SADEPTH_2		(2 )	/*  2-bit */
+#define SPHI_SADEPTH_4		(4 )	/*  4-bit */
+#define SPHI_SADEPTH_8		(8 )	/*  8-bit */
+#define SPHI_SADEPTH_16		(16)	/* 16-bit */
+
+/*
+ * Maximum palette count constants.
+ * 
+ * These are the maximum number of palette entries allowed for a given
+ * bit depth.  16-bit depth is not supported for indexed color, so the
+ * constant for that is zero, indicating no palette.
+ * 
+ * The MAX constant is the maximum number of palette entries of any bit
+ * depth.
+ */
+#define SPHI_PALMAX_1   (2  )
+#define SPHI_PALMAX_2   (4  )
+#define SPHI_PALMAX_4   (16 )
+#define SPHI_PALMAX_8   (256)
+#define SPHI_PALMAX_16  (0  )
+
+#define SPHI_PALMAX_MAX (256)
+
+/*
+ * Maximum color channel values for each bit depth.
+ * 
+ * Each color channel has a range of zero up to and including the
+ * constant below corresponding to the selected bit depth.
+ */
+#define SPHI_SAMAX_1  (1    )
+#define SPHI_SAMAX_2  (3    )
+#define SPHI_SAMAX_4  (15   )
+#define SPHI_SAMAX_8  (255  )
+#define SPHI_SAMAX_16 (65535)
+
+/*
+ * Colorspace mode constants.
+ * 
+ * There are four sRGB modes, each with a different rendering intent,
+ * which hints at how to best handle translations between color spaces.
+ * 
+ * Perceptual means that colors should be kept in similar perceptual
+ * relationships to each other, which is usually a good choice.
+ * 
+ * Relative means that colors should be kept the same, and colors that
+ * can't be translated should be clamped to the boundaries of the target
+ * color space.  This can result in better color fidelty if most of the
+ * colors are in range of the target color space, but it can also result
+ * in posterization artifacts if too many colors fall outside of the
+ * target range.
+ * 
+ * Saturation means that the saturation of colors is more important than
+ * other color dimensions.  This can be useful for abstract uses of
+ * color, such as in pie charts and other such diagrams.
+ * 
+ * Absolute means that absolute charateristics of colors should be
+ * preserved as much as possible.  This may result in significant
+ * perceptual distortion since the white point is not accounted for.
+ * This should only be used for special cases in advanced color
+ * management workflows.
+ * 
+ * It is up to the decoder to decide how to handle these rendering
+ * intent hints, or whether to ignore them.
+ * 
+ * All non-sRGB color spaces (differing by gamma, chromaticity, or both)
+ * use the non-sRGB mode.
+ */
+#define SPHI_CMODE_SRGB_PERCEPTUAL (1)
+#define SPHI_CMODE_SRGB_RELATIVE   (2)
+#define SPHI_CMODE_SRGB_SATURATION (3)
+#define SPHI_CMODE_SRGB_ABSOLUTE   (4)
+#define SPHI_CMODE_NON_SRGB        (5)
+
+/*
+ * A multiplier used for storing exact decimal values.
+ * 
+ * Certain fields specify that fractional values (such as 1.23456) are
+ * multiplied by this constant so that they can be stored as an integer
+ * (123456).
+ * 
+ * This multiplier is from the PNG specification.
+ */
+#define SPHI_MULTIPLIER (100000)
+
+/*
+ * The sRGB gamma and chromaticity values.
+ * 
+ * These are represented as fractions multiplied by SPHI_MULTIPLIER to
+ * store as integers.  They are from the PNG specification.
+ * 
+ * The "X" and "Y" values are actually the (lowercase) x and y values
+ * from xyY color representation.  They are in uppercase here because of
+ * the convention that constant names are in all uppercase.
+ */
+#define SPHI_SRGB_GAMMA   (45455)
+#define SPHI_SRGB_WHITE_X (31270)
+#define SPHI_SRGB_WHITE_Y (32900)
+#define SPHI_SRGB_RED_X   (64000)
+#define SPHI_SRGB_RED_Y   (33000)
+#define SPHI_SRGB_GREEN_X (30000)
+#define SPHI_SRGB_GREEN_Y (60000)
+#define SPHI_SRGB_BLUE_X  (15000)
+#define SPHI_SRGB_BLUE_Y  (6000 )
+
+/*
+ * The predefined configuration constants.
+ * 
+ * These are used with sphi_initInfo to select a sensible
+ * preconfiguration of the SPHI_METAINFO structure.
+ * 
+ * All preconfigurations have interlacing, falsecolor, and background
+ * set to false, the colorspace set to sRGB perceptual, the pixel aspect
+ * set to 1:1 (square pixels) in relative units, and the bit depth set
+ * to 8-bit.
+ * 
+ * Palette-based preconfigurations initialize each palette entry to zero
+ * for alpha, red, green, and blue, meaning fully transparent.  The
+ * client should write the appropriate palette values into the
+ * structure.
+ */
+#define SPHI_PREDEF_RGB    (1)	/* RGB with no alpha    */
+#define SPHI_PREDEF_RGBA   (2)	/* RGB with alpha       */
+#define SPHI_PREDEF_GRAY   (3)	/* Grayscale            */
+#define SPHI_PREDEF_GRAYA  (4)	/* Grayscale with alpha */
+#define SPHI_PREDEF_PAL256 (5)	/* Indexed color        */
+
+/*
+ * SPHI_PALENTRY
+ * -------------
+ * 
+ * Structure for storing a color palette entry.
+ */
+typedef struct {
+	
+	/*
+	 * The red channel,   with range [0, 255].
+	 */
+	uint8_t r;
+	
+	/*
+	 * The green channel, with range [0, 255].
+	 */
+	uint8_t g;
+	
+	/*
+	 * The blue channel,  with range [0, 255].
+	 */
+	uint8_t b;
+	
+	/*
+	 * The alpha channel, with range [0, 255].
+	 */
+	uint8_t a;
+
+} SPHI_PALENTRY;
+
+/*
+ * SPHI_METAINFO
+ * -------------
+ * 
+ * Structure for storing the core metadata for an image.
+ */
+typedef struct {
+	
+	/*
+	 * Image width in pixels.
+	 * 
+	 * This must be at least one and no greater than SPHI_MAXDIM.
+	 */
+	int32_t width;
+	
+	/*
+	 * Image height in pixels.
+	 * 
+	 * This must be at least one and no greater than SPHI_MAXDIM.
+	 */
+	int32_t height;
+	
+	/*
+	 * The sample count, which is the total number of color channels.
+	 * 
+	 * This must be in range SPHI_SACOUNT_MIN to SPHI_SACOUNT_MAX.  See
+	 * The SPHI_SACOUNT constants for the interpretation of each value.
+	 * 
+	 * See sadepth for some restrictions on how sample counts can be
+	 * combined with other parameters.
+	 */
+	int8_t sacount;
+	
+	/*
+	 * The sample depth, which is the total number of bits for each
+	 * color channel.
+	 * 
+	 * Only the values covered by the SPHI_SADEPTH constants are
+	 * allowed.
+	 * 
+	 * In addition, only certain combinations of sacount, sadepth, and
+	 * palcount (see later) are valid.  The rules are:
+	 * 
+	 * (1) 1-bit, 2-bit, and 4-bit depths may only be used with a
+	 *     sacount of one (grayscale or indexed).
+	 * 
+	 * (2) 16-bit depth may only be used with a palcount of zero (no
+	 *     palette).
+	 */
+	int8_t sadepth;
+	
+	/*
+	 * The number of color palette entries, or zero if there is no color
+	 * palette.
+	 * 
+	 * If palcount is non-zero, then sacount must be one.  palcount must
+	 * be in range zero up to and including the SPHI_PALMAX constant for
+	 * the selected bit depth.  (Note that the maximum for 16-bit depth
+	 * is zero, indicating no palette is allowed at that depth.)
+	 */
+	int16_t palcount;
+	
+	/*
+	 * The color palette, if applicable.
+	 * 
+	 * The palcount field determines how many of these records are
+	 * actually used.  If palcount is zero, then there is no palette and
+	 * none of these records are used.
+	 * 
+	 * Unused palette records have an undefined value.
+	 * 
+	 * Note that it is slightly more efficient when encoding PNG files
+	 * if color palette entries that are fully or partially transparent
+	 * come before color palette entries that are fully opaque in the
+	 * palette.
+	 */
+	SPHI_PALENTRY pal[SPHI_PALMAX_MAX];
+	
+	/*
+	 * Flag indicating whether the codec is handling pixels in
+	 * interlaced order.
+	 * 
+	 * If true, then the pixel order is interlaced and more than one
+	 * pass will be made to transfer the pixel data.  If false, then the
+	 * pixel order is not interlaced and exactly one pass will be made
+	 * to transfer the pixel data.
+	 * 
+	 * The client should make no assumptions about the interlaced or
+	 * non-interlaced order of pixels.  Instead, the client should
+	 * follow the pass specifications provided by the codec during pixel
+	 * data transfer operations.  The only thing that may be reliably
+	 * inferred from this flag is whether there is a single pass or
+	 * whether there is more than one pass.
+	 */
+	bool interlace;
+	
+	/*
+	 * Flag indicating whether there is a "false color" that will be
+	 * interpreted as transparent.
+	 * 
+	 * This flag is only allowed if palcount is zero and sacount is
+	 * neither two (grayscale with alpha) nor four (RGB with alpha).  In
+	 * all other cases, this flag must be false.  (Note that the other
+	 * cases include alpha channels, so a false color is unnecessary.)
+	 * 
+	 * This flag activates the false color fields below.  If an encoded
+	 * color value exactly matches the false color channel values, then
+	 * that pixel is treated as fully transparent.
+	 */
+	bool falsecolor;
+	
+	/*
+	 * The red value of the false color.
+	 * 
+	 * This field is only relevant if the falsecolor flag is set -- see
+	 * that field for further information.  Else, this field is
+	 * undefined and ignored.
+	 * 
+	 * If sacount is one (grayscale, since indexed color is not allowed
+	 * when the falsecolor flag is set), then false_r, false_g, and
+	 * false_b must have the same value, which is the grayscale value.
+	 * 
+	 * The range of this value is zero up to and including the
+	 * SPHI_SAMAX constant corresponding to the sample bit depth for
+	 * this image.
+	 */
+	uint16_t false_r;
+	
+	/*
+	 * The green value of the false color.
+	 * 
+	 * This field is only relevant if the falsecolor flag is set -- see
+	 * that field for further information.  Else, this field is
+	 * undefined and ignored.
+	 * 
+	 * If sacount is one (grayscale, since indexed color is not allowed
+	 * when the falsecolor flag is set), then false_r, false_g, and
+	 * false_b must have the same value, which is the grayscale value.
+	 * 
+	 * The range of this value is zero up to and including the
+	 * SPHI_SAMAX constant corresponding to the sample bit depth for
+	 * this image.
+	 */
+	uint16_t false_g;
+	
+	/*
+	 * The blue value of the false color.
+	 * 
+	 * This field is only relevant if the falsecolor flag is set -- see
+	 * that field for further information.  Else, this field is
+	 * undefined and ignored.
+	 * 
+	 * If sacount is one (grayscale, since indexed color is not allowed
+	 * when the falsecolor flag is set), then false_r, false_g, and
+	 * false_b must have the same value, which is the grayscale value.
+	 * 
+	 * The range of this value is zero up to and including the
+	 * SPHI_SAMAX constant corresponding to the sample bit depth for
+	 * this image.
+	 */
+	uint16_t false_b;
+	
+	/*
+	 * Flag indicating whether there is a default background color for
+	 * the image.
+	 * 
+	 * This is a hint to clients that wish to display an image for what
+	 * background color the image displays well against.  Clients are
+	 * free to override this specification if they have other ideas
+	 * about what the background should be.
+	 * 
+	 * This flag activates the background color fields defined below.
+	 */
+	bool background;
+	
+	/*
+	 * The red value of the default background color.
+	 * 
+	 * This field is only relevant if the background flag is set and
+	 * palcount is zero (indicating no palette).  Else, this field is
+	 * undefined and ignored.
+	 * 
+	 * If sacount is one (grayscale, since palcount is zero when this
+	 * field is active), then back_r, back_g, and back_b must have the
+	 * same value, which is the grayscale value.
+	 * 
+	 * The range of this value is zero up to and including the
+	 * SPHI_SAMAX constant corresponding to the sample bit depth for
+	 * this image.
+	 */
+	uint16_t back_r;
+	
+	/*
+	 * The green value of the default background color.
+	 * 
+	 * This field is only relevant if the background flag is set and
+	 * palcount is zero (indicating no palette).  Else, this field is
+	 * undefined and ignored.
+	 * 
+	 * If sacount is one (grayscale, since palcount is zero when this
+	 * field is active), then back_r, back_g, and back_b must have the
+	 * same value, which is the grayscale value.
+	 * 
+	 * The range of this value is zero up to and including the
+	 * SPHI_SAMAX constant corresponding to the sample bit depth for
+	 * this image.
+	 */
+	uint16_t back_g;
+	
+	/*
+	 * The blue value of the default background color.
+	 * 
+	 * This field is only relevant if the background flag is set and
+	 * palcount is zero (indicating no palette).  Else, this field is
+	 * undefined and ignored.
+	 * 
+	 * If sacount is one (grayscale, since palcount is zero when this
+	 * field is active), then back_r, back_g, and back_b must have the
+	 * same value, which is the grayscale value.
+	 * 
+	 * The range of this value is zero up to and including the
+	 * SPHI_SAMAX constant corresponding to the sample bit depth for
+	 * this image.
+	 */
+	uint16_t back_b;
+	
+	/*
+	 * The palette index of the color to use as a default background
+	 * color.
+	 * 
+	 * This field is only relevant if the background flag is set and
+	 * palcount is greater than zero (indicating a palette).  Else, this
+	 * field is undefined and ignored.
+	 * 
+	 * The range of this value is zero up to but excluding palcount.
+	 * Partially transparent palette entries are treated as if they were
+	 * fully opaque when selected as the default background color.
+	 */
+	uint8_t back_i;
+	
+	/*
+	 * The colorspace mode of this image.
+	 * 
+	 * This must be one of the SPHI_CMODE constants.  If one of the sRGB
+	 * constants is selected, all the gamma and chromaticity fields must
+	 * have the corresponding SPHI_SRGB constant value.  If the non-sRGB
+	 * constant is selected, at least one of the gamma and chromaticity
+	 * fields must have a value that differs from the corresponding
+	 * SPHI_SRGB constant.
+	 */
+	uint8_t cmode;
+	
+	/*
+	 * The encoding gamma value of this image.
+	 * 
+	 * Assuming that display component values and image component values
+	 * are in range 0.0 to 1.0, the display component value raised to
+	 * gamma yields the image component value.
+	 * 
+	 * Note that this is the encoding gamma, not the decoding gamma.
+	 * For example, a monitor that has a decoding gamma of 2.2 has an
+	 * encoding gamma of (1 / 2.2) ~= 0.45455
+	 * 
+	 * The actual encoding gamma is multiplied by SPHI_MULTIPLIER and
+	 * then stored as an integer.  Hence, the encoding gamma of
+	 * (1 / 2.2) will be stored in this field as 45455.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_GAMMA.
+	 */
+	int32_t gamma;
+	
+	/*
+	 * The x chromaticity of the white point.
+	 * 
+	 * This is represented in the xyY space, with Y assumed to be 1.0
+	 * for white.  The actual value is multiplied by SPHI_MULTIPLIER and
+	 * stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_WHITE_X.
+	 */
+	int32_t white_x;
+	
+	/*
+	 * The y chromaticity of the white point.
+	 * 
+	 * This is represented in the xyY space, with Y assumed to be 1.0
+	 * for white.  The actual value is multiplied by SPHI_MULTIPLIER and
+	 * stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_WHITE_Y.
+	 */
+	int32_t white_y;
+	
+	/*
+	 * The x chromaticity of red.
+	 * 
+	 * This is represented in the xyY space, with Y such that when red,
+	 * green, and blue channels are at full intensity (1.0) -- meaning
+	 * white -- Y will be 1.0.  The actual value is multiplied by
+	 * SPHI_MULTIPLIER and stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_RED_X.
+	 */
+	int32_t red_x;
+	
+	/*
+	 * The y chromaticity of red.
+	 * 
+	 * This is represented in the xyY space, with Y such that when red,
+	 * green, and blue channels are at full intensity (1.0) -- meaning
+	 * white -- Y will be 1.0.  The actual value is multiplied by
+	 * SPHI_MULTIPLIER and stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_RED_Y.
+	 */
+	int32_t red_y;
+	
+	/*
+	 * The x chromaticity of green.
+	 * 
+	 * This is represented in the xyY space, with Y such that when red,
+	 * green, and blue channels are at full intensity (1.0) -- meaning
+	 * white -- Y will be 1.0.  The actual value is multiplied by
+	 * SPHI_MULTIPLIER and stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_GREEN_X.
+	 */
+	int32_t green_x;
+	
+	/*
+	 * The y chromaticity of green.
+	 * 
+	 * This is represented in the xyY space, with Y such that when red,
+	 * green, and blue channels are at full intensity (1.0) -- meaning
+	 * white -- Y will be 1.0.  The actual value is multiplied by
+	 * SPHI_MULTIPLIER and stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_GREEN_Y.
+	 */
+	int32_t green_y;
+	
+	/*
+	 * The x chromaticity of blue.
+	 * 
+	 * This is represented in the xyY space, with Y such that when red,
+	 * green, and blue channels are at full intensity (1.0) -- meaning
+	 * white -- Y will be 1.0.  The actual value is multiplied by
+	 * SPHI_MULTIPLIER and stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_BLUE_X.
+	 */
+	int32_t blue_x;
+	
+	/*
+	 * The y chromaticity of blue.
+	 * 
+	 * This is represented in the xyY space, with Y such that when red,
+	 * green, and blue channels are at full intensity (1.0) -- meaning
+	 * white -- Y will be 1.0.  The actual value is multiplied by
+	 * SPHI_MULTIPLIER and stored in this field as an integer.
+	 * 
+	 * If cmode selects an sRGB mode, this field must be
+	 * SPHI_SRGB_BLUE_Y.
+	 */
+	int32_t blue_y;
+	
+	/*
+	 * True if pixel aspect fields (see below) are in absolute units,
+	 * false if in relative units.
+	 * 
+	 * If in absolute units, the unit is pixels per meter.  If relative,
+	 * then only the ratio is significant.
+	 */
+	bool absolute;
+	
+	/*
+	 * Horizontal pixel aspect ratio.
+	 * 
+	 * This must be greater than zero.  If the absolute flag is set, the
+	 * unit is pixels per meter.  Else, only the ratio between pxas_h
+	 * and pxas_v is relevant.
+	 * 
+	 * Note that this is the aspect ratio of individual pixels, not of
+	 * the entire image.  If pxas_h and pxas_v are equal, then the
+	 * pixels will be square.
+	 */
+	int32_t pxas_h;
+	
+	/*
+	 * Vertical pixel aspect ratio.
+	 * 
+	 * This must be greater than zero.  If the absolute flag is set, the
+	 * unit is pixels per meter.  Else, only the ratio between pxas_h
+	 * and pxas_v is relevant.
+	 * 
+	 * Note that this is the aspect ratio of individual pixels, not of
+	 * the entire image.  If pxas_h and pxas_v are equal, then the
+	 * pixels will be square.
+	 */
+	int32_t pxas_v;
+	
+} SPHI_METAINFO;
+
+/*
+ * Check whether a provided metadata information structure is valid.
+ * 
+ * If true is returned, then all the constraints have been satisfied.
+ * If false is returned, then the structure has invalid field values, or
+ * a particular combination of field values is not allowed.
+ * 
+ * See the structure documentation for the details of the fields and
+ * their constraints.
  * 
  * Parameters:
  * 
- *   a - the alpha channel
- * 
- *   r - the red channel
- * 
- *   g - the green channel
- * 
- *   b - the blue channel
+ *   pmi - pointer to the metadata information structure
  * 
  * Return:
  * 
- *   the packed 32-bit image sample
+ *   true if valid, false if invalid
+ * 
+ * Faults:
+ * 
+ *   - If pmi is NULL
  */
-sphy_u32 sphy_argb(sphy_int a, sphy_int r, sphy_int g, sphy_int b);
+bool sphi_validInfo(const SPHI_METAINFO *pmi);
 
 /*
- * Pack left and right channels into a 32-bit image sample.
+ * Initialize a provided metadata information structure with a sensible
+ * configuration.
  * 
- * Each provided channel is clamped to range SPHY_MINSWORD to
- * SPHY_MAXSWORD using sphy_clamp.
+ * If the structure is already initialized, all its current values are
+ * reset by this function.
  * 
- * The packed channel values will be converted to unsigned range zero up
- * to and including SPHY_MAXUWORD by adding 32768 to each clamped
- * channel value.
+ * Although not required, a good strategy is to initialize a metadata
+ * information structure with this function, and then only adjust what's
+ * not covered by the predefined configuration.
+ * 
+ * predef must be one of the SPHI_PREDEF constants.  width and height
+ * must both be in range one up to and including SPHI_MAXDIM.
+ * 
+ * The metadata information structure will be valid according to
+ * sphi_validInfo after calling this function.
  * 
  * Parameters:
  * 
- *   left - the left channel
+ *   pmi - pointer to the metadata information structure to initialize
  * 
- *   right - the right channel
+ *   predef - one of the predefined configuration constants
  * 
- * Return:
+ *   width - the width of the image in pixels
  * 
- *   the packed 32-bit audio sample
+ *   height - the height of the image in pixels
+ * 
+ * Faults:
+ * 
+ *   - If pmi is NULL
+ * 
+ *   - If predef is not a recognized constant
+ * 
+ *   - If width is not in range [1, SPHI_MAXDIM]
+ * 
+ *   - If height is not in range [1, SPHI_MAXDIM]
  */
-sphy_u32 sphy_stereo(sphy_int left, sphy_int right);
-
-/*
- * Unpack the alpha channel from the provided 32-bit image sample.
- * 
- * The return value will be in range zero up to and including
- * SPHY_MAXBYTE.
- * 
- * Parameters:
- * 
- *   argb - the packed image sample
- * 
- * Return:
- * 
- *   the alpha channel
- */
-sphy_int sphy_a(sphy_u32 argb);
-
-/*
- * Unpack the red channel from the provided 32-bit image sample.
- * 
- * The return value will be in range zero up to and including
- * SPHY_MAXBYTE.
- * 
- * Parameters:
- * 
- *   argb - the packed image sample
- * 
- * Return:
- * 
- *   the red channel
- */
-sphy_int sphy_r(sphy_u32 argb);
-
-/*
- * Unpack the green channel from the provided 32-bit image sample.
- * 
- * The return value will be in range zero up to and including
- * SPHY_MAXBYTE.
- * 
- * Parameters:
- * 
- *   argb - the packed image sample
- * 
- * Return:
- * 
- *   the green channel
- */
-sphy_int sphy_g(sphy_u32 argb);
-
-/*
- * Unpack the blue channel from the provided 32-bit image sample.
- * 
- * The return value will be in range zero up to and including
- * SPHY_MAXBYTE.
- * 
- * Parameters:
- * 
- *   argb - the packed image sample
- * 
- * Return:
- * 
- *   the blue channel
- */
-sphy_int sphy_b(sphy_u32 argb);
-
-/*
- * Unpack the left channel from the provided 32-bit audio sample.
- * 
- * The return value will be in range SPHY_MINSWORD up to and including
- * SPHY_MAXSWORD.
- * 
- * Parameters:
- * 
- *   stereo - the packed audio sample
- * 
- * Return:
- * 
- *   the left channel
- */
-sphy_int sphy_left(sphy_u32 stereo);
-
-/*
- * Unpack the right channel from the provided 32-bit audio sample.
- * 
- * The return value will be in range SPHY_MINSWORD up to and including
- * SPHY_MAXSWORD.
- * 
- * Parameters:
- * 
- *   stereo - the packed audio sample
- * 
- * Return:
- * 
- *   the right channel
- */
-sphy_int sphy_right(sphy_u32 stereo);
-
-/*
- * Bound a floating point value to unsigned normal range.
- * 
- * If the provided value is greater than or equal to 0.0 and less than
- * or equal to +1.0, then it is left alone.
- * 
- * If the provided value is greater than +1.0, it is set to +1.0.
- * 
- * If the provided value is less than 0.0, it is set to 0.0.
- * 
- * In all other cases (such as for a NaN), the value is set to 0.0.
- * 
- * The return value will always be in range 0.0 up to +1.0.
- * 
- * Parameters:
- * 
- *   f - the floating point value to bound
- * 
- * Return:
- * 
- *   the value bounded to unsigned normal range
- */
-sphy_float sphy_boundu(sphy_float f);
-
-/*
- * Bound a floating point value to signed normal range.
- * 
- * If the provided value is greater than or equal to -1.0 and less than
- * or equal to +1.0, then it is left alone.
- * 
- * If the provided value is greater than +1.0, it is set to +1.0.
- * 
- * If the provided value is less than -1.0, it is set to -1.0.
- * 
- * In all other cases (such as for a NaN), the value is set to 0.0.
- * 
- * The return value will always be in range -1.0 up to +1.0.
- * 
- * Parameters:
- * 
- *   f - the floating point value to bound
- * 
- * Return:
- * 
- *   the value bounded to unsigned normal range
- */
-sphy_float sphy_bounds(sphy_float f);
-
-/*
- * Clamp an integer value to range.
- * 
- * minval must be less than or equal to maxval.
- * 
- * If i is less than minval, it is set to minval.  If i is greater than
- * maxval, it is set to maxval.  Otherwise, it is left alone.
- * 
- * The return value will always be in range minval up to and including
- * maxval.
- * 
- * Parameters:
- * 
- *   i - the integer value to clamp
- * 
- *   minval - the minimum value in the clamped range
- * 
- *   maxval - the maximum value in the clamped range
- * 
- * Return:
- * 
- *   the clamped integer value
- */
-sphy_int sphy_clamp(sphy_int i, sphy_int minval, sphy_int maxval);
-
-/*
- * Quantize an unsigned normal component into an unsigned integer
- * component.
- * 
- * The provided normal component (f) is first bounded to unsigned normal
- * range (0.0 to +1.0) using sphy_boundu.
- * 
- * maxval must be in range one up to and including SPHY_MAXUWORD.  The
- * bounded unsigned normal component is then multiplied by maxval.  This
- * result is then rounded to the nearest integer.
- * 
- * Finally, the rounded result is converted to an integer and clamped to
- * the integer range zero to maxval by using sphy_clamp.
- * 
- * The return value is in range zero up to and including maxval.
- * 
- * Parameters:
- * 
- *   f - the unsigned normal component to quantize
- * 
- *   maxval - the maximum integer value
- * 
- * Return:
- * 
- *   the quantized unsigned value
- */
-sphy_int sphy_quantu(sphy_float f, sphy_int maxval);
-
-/*
- * Quantize a signed normal component into a signed integer component.
- * 
- * The provided normal component (f) is first bounded to signed normal
- * range (-1.0 to +1.0) using sphy_bounds.
- * 
- * maxval must be in range one up to and including SPHY_MAXSWORD.  The
- * bounded signed normal component is then multiplied by maxval.  This
- * result is then rounded to the nearest integer.
- * 
- * Finally, the rounded result is converted to an integer and clamped to
- * the integer range -maxval to +maxval by using sphy_clamp.
- * 
- * The return value is in range -maxval up to and including +maxval.
- * 
- * Note that in the common two's-complement representation of signed
- * integers, the negative range goes one further than the positive range
- * (that is, (-maxval-1) up to +maxval).  This conversion function never
- * generates the "one further" negative value of (-maxval-1), so that
- * the range of values is always symmetric around zero.
- * 
- * Parameters:
- * 
- *   f - the signed normal component to quantize
- * 
- *   maxval - the maximum integer value
- * 
- * Return:
- * 
- *   the quantized signed value
- */
-sphy_int sphy_quants(sphy_float f, sphy_int maxval);
-
-/*
- * Normalize an unsigned integer component into a normal float.
- * 
- * The provided integer component (i) is first clamped to range zero to
- * maxval by using sphy_clamp.  maxval must be in range one up to and
- * including SPHY_MAXUWORD.
- * 
- * The integer component is then converted to a float value and divided
- * by maxval.  Finally, the float value is bounded to unsigned range
- * (0.0 to +1.0) using sphy_boundu.
- * 
- * The return value is in range 0.0 to +1.0.
- * 
- * Parameters:
- * 
- *   i - the unsigned integer component to normalize
- * 
- *   maxval - the maximum integer value
- * 
- * Return:
- * 
- *   the normalized unsigned value
- */
-sphy_float sphy_normu(sphy_int i, sphy_int maxval);
-
-/*
- * Normalize a signed integer component into a normal float.
- * 
- * The provided integer component (i) is first clamped to range -maxval
- * to maxval by using sphy_clamp.  maxval must be in range one up to and
- * including SPHY_MAXSWORD.
- * 
- * The integer component is then converted to a float value and divided
- * by maxval.  Finally, the float value is bounded to signed range
- * (-1.0 to +1.0) using sphy_bounds.
- * 
- * The return value is in range -1.0 to +1.0.
- * 
- * Note that in the common two's-complement representation of signed
- * integers, the negative range goes one further than the positive range
- * (that is, (-maxval-1) up to +maxval).  This conversion function
- * treats the "one further" negative value of (-maxval-1) as if it were
- * -maxval, so that the range of values is always symmetric around zero.
- * 
- * Parameters:
- * 
- *   i - the signed integer component to normalize
- * 
- *   maxval - the maximum integer value
- * 
- * Return:
- * 
- *   the normalized signed value
- */
-sphy_float sphy_norms(sphy_int i, sphy_int maxval);
-
-/*
- * Requantize an unsigned integer component to a different unsigned
- * integer range.
- * 
- * omaxval is the original maxval that the provided integer component
- * (i) is quantized to.  nmaxval is the new maxval that the return value
- * should be quantized to.  Both omaxval and nmaxval must be in range
- * one up to and including SPHY_MAXUWORD.
- * 
- * First, the provided integer component (i) is clamped to range zero to
- * +omaxval by using sphy_clamp.
- * 
- * Second, the integer is converted to a float value and divided by
- * omaxval to convert to an unsigned normal in range 0.0 to 1.0.
- * 
- * Third, the result of this operation is sent to sphy_quantu using
- * nmaxval to convert to an unsigned integer in range zero to nmaxval.
- * 
- * The return value is in range zero to nmaxval.
- * 
- * As a special case, if omaxval and nmaxval are equal to each other,
- * the return value is simply i clamped to range zero to nmaxval using
- * sphy_clamp.
- * 
- * Parameters:
- * 
- *   i - the unsigned integer component to requantize
- * 
- *   omaxval - the original maximum integer value of i
- * 
- *   nmaxval - the new maximum integer value for the return value
- * 
- * Return:
- * 
- *  the requantized integer component
- */
-sphy_int sphy_requantu(sphy_int i, sphy_int omaxval, sphy_int nmaxval);
-
-/*
- * Requantize a signed integer component to a different signed integer
- * range.
- * 
- * omaxval is the original maxval that the provided integer component
- * (i) is quantized to.  nmaxval is the new maxval that the return value
- * should be quantized to.  Both omaxval and nmaxval must be in range
- * one up to and including SPHY_MAXSWORD.
- * 
- * First, the provided integer component (i) is clamped to range
- * -omaxval to +omaxval by using sphy_clamp.
- * 
- * Second, the integer is converted to a float value and divided by
- * omaxval to convert to a signed normal in range -1.0 to 1.0.
- * 
- * Third, the result of this operation is sent to sphy_quants using
- * nmaxval to convert to a signed integer in range -nmaxval to +nmaxval.
- * 
- * The return value is in range -nmaxval to +nmaxval.
- * 
- * Note that in the common two's-complement representation of signed
- * integers, the negative range goes one further than the positive range
- * (that is, (-omaxval-1) up to +omaxval).  This conversion function
- * treats the "one further" negative value of (-omaxval-1) as if it were
- * -omaxval, so that the range of values is always symmetric around
- * zero.  The return value will never return a "one further" negative
- * value of (-nmaxval-1).
- * 
- * As a special case, if omaxval and nmaxval are equal to each other,
- * the return value is simply i clamped to range -nmaxval to nmaxval
- * using sphy_clamp.
- * 
- * Parameters:
- * 
- *   i - the signed integer component to requantize
- * 
- *   omaxval - the original maximum integer value of i
- * 
- *   nmaxval - the new maximum integer value for the return value
- * 
- * Return:
- * 
- *  the requantized integer component
- */
-sphy_int sphy_requants(sphy_int i, sphy_int omaxval, sphy_int nmaxval);
+void sphi_initInfo(
+		SPHI_METAINFO * pmi   ,
+		int32_t         predef,
+		int32_t         width ,
+		int32_t         height );
 
 #endif
