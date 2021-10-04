@@ -4,9 +4,12 @@
  * Implementation of sophistry.h
  */
 #include "sophistry.h"
-#include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* Older versions of libpng complain if we include this for some reason,
+ * because they already included it */
+/* #include <setjmp.h> */
 
 /* Include <stdio.h> and <stddef.h> before png.h! */
 #include "png.h"
@@ -1117,6 +1120,9 @@ SPH_IMAGE_READER *sph_image_reader_new(
   int ccount = 0;
   int alpha_flag = 0;
   
+  png_uint_32 w_png = 0;
+  png_uint_32 h_png = 0;
+  
   png_structp png_ptr = NULL;
   png_infop info_ptr = NULL;
 
@@ -1170,11 +1176,18 @@ SPH_IMAGE_READER *sph_image_reader_new(
     /* Get information about the input file format */
     if (status) {
       png_get_IHDR(png_ptr, info_ptr,
-        &w, &h,
+        &w_png, &h_png,
         &bdepth,
         &ctype,
         &imethod,
         NULL, NULL);
+      
+      /* Older versions of libpng define png_uint_32 as a long, which
+       * might be 64-bit on some platforms, so we first have to save
+       * the variables to a png_uint_32, then transfer them to w and h
+       * here */
+      w = (uint32_t) w_png;
+      h = (uint32_t) h_png;
     }
     
     /* Make sure dimensions are not too large */
