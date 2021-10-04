@@ -126,6 +126,24 @@ body {
 
 <p>Readers and writers may be closed at any time, which also closes the file they are associated with.  However, if a writer is closed before all scanlines have been written, the resulting image file will be invalid.</p>
 
+<h3>3.4 <span style="font-variant: small-caps;">imgcopy</span> program</h3>
+
+<p>Sophistry includes the <tt>imgcopy</tt> program.  This program uses Sophistry to read either a PNG or JPEG file and then write a PNG or JPEG file on output.  The file is completely re-encoded and no extra metadata is carried over.</p>
+
+<p>This program is useful for stripping input image files of unnecessary metadata and ensuring that they are encoded the same way that any other Sophistry output would be.</p>
+
+<p>The syntax is:</p>
+
+<blockquote>
+<tt>imgcopy [output] [input] ([q] ([dconv]))</tt>
+</blockquote>
+
+<p>The <tt>output</tt> and <tt>input</tt> parameters specify the input and output file paths.  They are always required.  The output path will be overwritten if it already exists.  Both paths must have a (case-insensitive) file extension that Sophistry recognizes (<tt>.PNG</tt> <tt>.JPG</tt> <tt>.JPEG</tt>).</p>
+
+<p>The <tt>q</tt> and <tt>dconv</tt> parameters are both optional.  If <tt>dconv</tt> is specified, <tt>q</tt> must be specified, too.  The <tt>q</tt> parameter is the compression quality.  This is only relevant for JPEG files.  Zero means highest compression but worst image quality, 100 means lowest compression but best image quality.  If not specified, a default of 90 is used.</p>
+
+<p>The <tt>dconv</tt> parameter specifies down-conversion.  It may be a case-sensitive match for either <tt>rgb</tt> or <tt>gray</tt>.  If not specified, no down-conversion will be used for PNG output files, while RGB down-conversion will be used for JPEG output files.</p>
+
 <h2>4. Compilation</h2>
 
 <p>Compile with libpng.  <tt>-lpng</tt> might work for this.  libpng depends on zlib, though Sophistry does not directly use zlib.</p>
