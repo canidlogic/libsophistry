@@ -1,8 +1,7 @@
 /*
  * pngcopy.c
  * 
- * See the Sophistry manual in the doc directory for further
- * information.
+ * See the README file for further information.
  */
 #include "sophistry.h"
 #include <limits.h>
