@@ -32,10 +32,6 @@ struct SPH_IMAGE_WRITER_TAG {
    * The kind of image being written.
    * 
    * This must be one of the SPH_IMAGE_TYPE constants.
-   * 
-   * ================================================
-   * Currently, only SPH_IMAGE_TYPE_PNG is supported!
-   * ================================================
    */
   int ftype;
   
@@ -124,10 +120,6 @@ struct SPH_IMAGE_READER_TAG {
    * The kind of image being read.
    * 
    * This must be one of the SPH_IMAGE_TYPE constants.
-   * 
-   * ================================================
-   * Currently, only SPH_IMAGE_TYPE_PNG is supported!
-   * ================================================
    */
   int ftype;
   
@@ -460,8 +452,6 @@ static void sph_png_decodeRow(
  * following:
  * 
  *   .PNG
- *   .JPEG
- *   .JPG
  * 
  * Then this function returns the appropriate SPH_IMAGE_TYPE constant.
  * Otherwise, this function returns -1 to indicate that the file type
@@ -525,9 +515,6 @@ static int sph_path_getImageType(const char *pPath) {
   /* Look up extension code */
   if (extcode == 0x504e47) {
     result = SPH_IMAGE_TYPE_PNG;
-  
-  } else if ((extcode == 0x4a5047) || (extcode == 0x4a504547)) {
-    result = SPH_IMAGE_TYPE_JPEG;
   
   } else {
     /* Unrecognized */
@@ -746,11 +733,14 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
   
   SPH_IMAGE_WRITER *pw = NULL;
   
+  /* Ignore the q parameter */
+  (void) q;
+  
   /* Check parameters */
   if (pOut == NULL) {
     abort();
   }
-  if ((ftype != SPH_IMAGE_TYPE_PNG) && (ftype != SPH_IMAGE_TYPE_JPEG)) {
+  if (ftype != SPH_IMAGE_TYPE_PNG) {
     abort();
   }
   if ((w < 1) || (w > SPH_IMAGE_MAXDIM)) {
@@ -763,26 +753,6 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
       (dconv != SPH_IMAGE_DOWN_RGB) &&
       (dconv != SPH_IMAGE_DOWN_GRAY)) {
     abort();
-  }
-  
-  /* Set quality to 90 if it has the -1 value */
-  if (q == -1) {
-    q = 90;
-  }
-  
-  /* Clamp quality */
-  if (q < 0) {
-    q = 0;
-  } else if (q > 100) {
-    q = 100;
-  }
-  
-  /* If JPEG, we must have RGB or grayscale down-conversion */
-  if (ftype == SPH_IMAGE_TYPE_JPEG) {
-    if ((dconv != SPH_IMAGE_DOWN_RGB) &&
-        (dconv != SPH_IMAGE_DOWN_GRAY)) {
-      abort();
-    }
   }
   
   /* Allocate image writer structure */
@@ -902,10 +872,6 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
     /* Write PNG headers to output */
     png_write_info(pw->png_ptr, pw->info_ptr);
   
-  } else if (ftype == SPH_IMAGE_TYPE_JPEG) {
-    /* @@FIXME: JPEG files not supported at the moment */
-    abort();
-  
   } else {
     /* Unrecognized image file type */
     abort();
@@ -958,14 +924,6 @@ SPH_IMAGE_WRITER *sph_image_writer_newFromPath(
     }
   }
   
-  /* If JPEG type and dconv is NONE, change to RGB */
-  if (status) {
-    if ((ftype == SPH_IMAGE_TYPE_JPEG) &&
-        (dconv == SPH_IMAGE_DOWN_NONE)) {
-      dconv = SPH_IMAGE_DOWN_RGB;
-    }
-  }
-  
   /* Call through if no error */
   if (status) {
     pw = sph_image_writer_new(pOut, ftype, w, h, dconv, q);
@@ -1001,9 +959,6 @@ void sph_image_writer_close(SPH_IMAGE_WRITER *pw) {
   
       /* Free PNG structures */
       png_destroy_write_struct(&(pw->png_ptr), &(pw->info_ptr));
-    
-    } else if (pw->ftype == SPH_IMAGE_TYPE_JPEG) {
-      /* @@FIXME: JPEG support */
     
     } else {
       /* Unrecognized image type */
@@ -1091,10 +1046,6 @@ void sph_image_writer_write(SPH_IMAGE_WRITER *pw) {
       png_write_end(pw->png_ptr, pw->info_ptr);
     }
     
-  } else if (pw->ftype == SPH_IMAGE_TYPE_JPEG) {
-    /* @@FIXME: add JPEG support */
-    abort();
-  
   } else {
     /* Unrecognized image type */
     abort();
@@ -1130,7 +1081,7 @@ SPH_IMAGE_READER *sph_image_reader_new(
   if (pIn == NULL) {
     abort();
   }
-  if ((ftype != SPH_IMAGE_TYPE_PNG) && (ftype != SPH_IMAGE_TYPE_JPEG)) {
+  if (ftype != SPH_IMAGE_TYPE_PNG) {
     abort();
   }
   
@@ -1307,10 +1258,6 @@ SPH_IMAGE_READER *sph_image_reader_new(
       info_ptr = NULL;
     }
   
-  } else if (ftype == SPH_IMAGE_TYPE_JPEG) {
-    /* @@FIXME: JPEG files not supported at the moment */
-    abort();
-  
   } else {
     /* Unrecognized image file type */
     abort();
@@ -1347,10 +1294,6 @@ SPH_IMAGE_READER *sph_image_reader_new(
     
     png_ptr = NULL;
     info_ptr = NULL;
-    
-  } else if (status && (ftype == SPH_IMAGE_TYPE_JPEG)) {
-    /* @@FIXME: JPEG support */
-    abort();
     
   } else if (status) {
     /* Unrecognized image type */
@@ -1461,9 +1404,6 @@ void sph_image_reader_close(SPH_IMAGE_READER *pr) {
           &(pr->png_ptr),
           &(pr->info_ptr),
           (png_infopp)NULL);
-    
-    } else if (pr->ftype == SPH_IMAGE_TYPE_JPEG) {
-      /* @@FIXME: JPEG support */
     
     } else {
       /* Unrecognized image type */
@@ -1579,10 +1519,6 @@ uint32_t *sph_image_reader_read(SPH_IMAGE_READER *pr, int *pError) {
         pr->err_flag = 1;
       }
     
-    } else if (pr->ftype == SPH_IMAGE_TYPE_JPEG) {
-      /* @@FIXME: add JPEG support */
-      abort();
-  
     } else {
       /* Unrecognized image type */
       abort();
@@ -1625,7 +1561,7 @@ const char *sph_image_errorString(int code) {
       break;
     
     case SPH_IMAGE_ERR_BITDEPTH:
-      result = "Images with 12-bit or 16-bit channels are unsupported";
+      result = "Images with 16-bit channels are unsupported";
       break;
     
     case SPH_IMAGE_ERR_IMAGEDIM:
