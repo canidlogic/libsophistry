@@ -4,7 +4,8 @@
 /*
  * sophistry.h
  * 
- * See the README for further information.
+ * See the Sophistry manual in the doc directory for further
+ * information.
  */
 
 #include <stddef.h>
@@ -23,7 +24,6 @@ typedef struct SPH_IMAGE_READER_TAG SPH_IMAGE_READER;
 
 /* Image file type definitions */
 #define SPH_IMAGE_TYPE_PNG  (1)   /* PNG file */
-#define SPH_IMAGE_TYPE_JPEG (2)   /* JPEG file */
 
 /* Image down-conversion types */
 #define SPH_IMAGE_DOWN_NONE (0)   /* No down-conversion */
@@ -182,12 +182,8 @@ void sph_argb_downGray(SPH_ARGB *pc);
  * writer object is closed.
  * 
  * ftype is the type of image file to write.  It must be one of the
- * SPH_IMAGE_TYPE constants.
- * 
- * ====================================================================
- * NOTE: Currently, only PNG files are supported, and requesting a JPEG
- * file will result in an error.
- * ====================================================================
+ * SPH_IMAGE_TYPE constants.  (Currently, only the PNG type is
+ * supported.)
  * 
  * w and h are the dimensions of the image, in pixels.  Each value must
  * be at least one and no greater than SPH_IMAGE_MAXDIM.
@@ -197,12 +193,8 @@ void sph_argb_downGray(SPH_ARGB *pc);
  * down-conversion is requested.  JPEG files must use either RGB or
  * grayscale down-conversion.
  * 
- * q is the compression quality.  It is a scale from zero to 100, with
- * out-of-range values clamped to that range.  zero is the most
- * compression but least image quality, while 100 is the least
- * compression but highest image quality.  If the special value -1 is
- * passed, a default quality level of 90 will be used.  This is used by
- * JPEG compression, but ignored for PNG files.
+ * q is reserved for a compression quality value.  It is not currently
+ * used and should be set to zero.
  * 
  * After an image writer is allocated, call sph_image_writer_write() to
  * write each scanline.  Then, close the image writer.  All image writer
@@ -220,7 +212,7 @@ void sph_argb_downGray(SPH_ARGB *pc);
  * 
  *   dconv - the down-conversion requested
  * 
- *   q - the compression quality
+ *   q - reserved, set to zero
  * 
  * Return:
  * 
@@ -246,22 +238,13 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
  * for one of the following:
  * 
  *   .PNG
- *   .JPG
- *   .JPEG
  * 
- * This is used to automatically determine whether a JPEG or PNG file
- * should be written.  If the end of the path does not match one of the
- * above strings, then the function fails and returns NULL.
+ * This is used to automatically determine the type of image file that
+ * should be written (currently only PNG supported).  If the end of the
+ * path does not match one of the above strings, then the function fails
+ * and returns NULL.
  * 
- * ====================================================================
- * NOTE: Currently, only PNG files are supported, and requesting a JPEG
- * file will result in an error.
- * ====================================================================
- * 
- * The parameters w h and q are passed through as-is.  dconv is passed
- * through as-is, except if a file type of JPEG is detected and the
- * passed dconv is for NONE, it is automatically changed to RGB
- * down-conversion because JPEG must use down-conversion.
+ * The parameters w h dconv and q are passed through as-is.
  * 
  * If pError is provided, then it will always be filled in upon return
  * either with an error code (if the function fails) or with zero
@@ -279,7 +262,7 @@ SPH_IMAGE_WRITER *sph_image_writer_new(
  * 
  *   dconv - the down-conversion requested
  * 
- *   q - the compression quality
+ *   q - reserved, set to zero
  * 
  *   pError - pointer to error return, or NULL
  * 
@@ -376,12 +359,7 @@ void sph_image_writer_write(SPH_IMAGE_WRITER *pw);
  * reader object is closed.
  * 
  * ftype is the type of image file to read.  It must be one of the
- * SPH_IMAGE_TYPE constants.
- * 
- * ====================================================================
- * NOTE: Currently, only PNG files are supported, and requesting a JPEG
- * file will result in an error.
- * ====================================================================
+ * SPH_IMAGE_TYPE constants.  (Currently only PNG is supported.)
  * 
  * After an image reader is allocated, sph_image_reader_width() and
  * sph_image_reader_height() can retrieve the dimensions of the file,
@@ -420,17 +398,11 @@ SPH_IMAGE_READER *sph_image_reader_new(
  * for one of the following:
  * 
  *   .PNG
- *   .JPG
- *   .JPEG
  * 
- * This is used to automatically determine whether a JPEG or PNG file
- * should be read.  If the end of the path does not match one of the
- * above strings, then the function fails and returns NULL.
- * 
- * ====================================================================
- * NOTE: Currently, only PNG files are supported, and requesting a JPEG
- * file will result in an error.
- * ====================================================================
+ * This is used to automatically determine the type of image file that
+ * should be written (currently only PNG supported).  If the end of the
+ * path does not match one of the above strings, then the function fails
+ * and returns NULL.
  * 
  * The pError parameter is passed through as-is.  This function may
  * return SPH_IMAGE_ERR_FILETYPE error if the file extension couldn't
